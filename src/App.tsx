@@ -352,7 +352,6 @@ export function App() {
         </div>
       </footer>
 
-
       {/* Модальное окно базы сохраненных проектов */}
       <SavedProjectsModal
         isOpen={isProjectsModalOpen}
@@ -362,6 +361,7 @@ export function App() {
     </div>
   );
 }
+
 
 
 export default App;
