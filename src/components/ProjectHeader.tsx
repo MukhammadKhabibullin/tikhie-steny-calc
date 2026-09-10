@@ -26,6 +26,7 @@ interface ProjectHeaderProps {
   isSaving: boolean;
   lastSavedAt: string | null;
   onOpenProjectsModal?: () => void;
+  onNewProject?: () => void;
 }
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -37,6 +38,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   isSaving,
   lastSavedAt,
   onOpenProjectsModal,
+  onNewProject,
 }) => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -120,8 +122,18 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
               </div>
             </div>
 
-            {/* Кнопки сохранения и проектов */}
+            {/* Кнопки управления проектом */}
             <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+              {onNewProject && (
+                <button
+                  type="button"
+                  onClick={onNewProject}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 shadow-2xs transition"
+                  title="Создать новый пустой проект"
+                >
+                  + Новый
+                </button>
+              )}
               {onOpenProjectsModal && (
                 <button
                   type="button"
@@ -132,6 +144,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   База
                 </button>
               )}
+
               <button
                 type="button"
                 onClick={onSaveProject}

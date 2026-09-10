@@ -17,89 +17,59 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-// Исходные демонстрационные данные в стиле "Тихие Стены"
+// Чистое начальное состояние (все поля и показатели пустые/нулевые)
 const INITIAL_PROJECT: Project = {
-  id: 'proj-' + Date.now(),
-  title: 'Квартира ЖК «Тихий Квартал», кв. 42',
-  clientName: 'Алексей Смирнов',
-  phone: '+7 (999) 234-56-78',
-  address: 'г. Москва, ул. Акустическая, д. 12',
-  dealId: 'TS-2026-089',
+  id: crypto.randomUUID(),
+  title: '',
+  clientName: '',
+  phone: '',
+  address: '',
+  dealId: '',
   createdAt: new Date().toISOString(),
 };
 
-const INITIAL_ROOMS: Room[] = [
-  {
-    id: 'room-1',
-    name: 'Гостиная-Кинозал',
-    ceilingHeight: 2800,
-    walls: [
-      { id: 'w-1', name: 'Фронтальная стена', length: 5200 },
-      { id: 'w-2', name: 'Правая стена', length: 4100 },
-      { id: 'w-3', name: 'Тыльная стена', length: 5200 },
-      { id: 'w-4', name: 'Левая стена с окном', length: 4100 },
-    ],
-    openings: [
-      { id: 'op-1', type: 'window', width: 2200, height: 1800 },
-      { id: 'op-2', type: 'door', width: 900, height: 2100 },
-    ],
-  },
-  {
-    id: 'room-2',
-    name: 'Мастер-Спальня',
-    ceilingHeight: 2800,
-    walls: [
-      { id: 'w-21', name: 'Стена изголовья', length: 3800 },
-      { id: 'w-22', name: 'Стена окна', length: 3200 },
-      { id: 'w-23', name: 'Стена шкафа', length: 3800 },
-      { id: 'w-24', name: 'Стена двери', length: 3200 },
-    ],
-    openings: [
-      { id: 'op-21', type: 'window', width: 1600, height: 1600 },
-      { id: 'op-22', type: 'door', width: 800, height: 2100 },
-    ],
-  },
-];
+const INITIAL_ROOMS: Room[] = [];
 
 const INITIAL_MATERIALS: MaterialItem[] = [
   {
-    id: 'mat-1',
+    id: crypto.randomUUID(),
     category: 'fabric',
     name: 'Акустическая ткань D-Premium Acoustic (бесшовная, 5.0м)',
     unit: 'm2',
     costPrice: 1650,
     clientPrice: 2850,
-    quantity: 76.5,
+    quantity: 0,
   },
   {
-    id: 'mat-2',
+    id: crypto.randomUUID(),
     category: 'profile',
     name: 'Профиль пристенный клипсовый TS-Wall Clip (2.0 м)',
     unit: 'm',
     costPrice: 320,
     clientPrice: 580,
-    quantity: 65.4,
+    quantity: 0,
     profileUnitMode: 'm',
   },
   {
-    id: 'mat-3',
+    id: crypto.randomUUID(),
     category: 'other',
     name: 'Звукопоглощающая акустическая плита СтопЗвук Эко 50мм',
     unit: 'm2',
     costPrice: 520,
     clientPrice: 940,
-    quantity: 76.5,
+    quantity: 0,
   },
   {
-    id: 'mat-4',
+    id: crypto.randomUUID(),
     category: 'plinth',
     name: 'Теневой плинтус / демпферная лента TS-Shadow 15мм',
     unit: 'm',
     costPrice: 210,
     clientPrice: 420,
-    quantity: 40,
+    quantity: 0,
   },
 ];
+
 
 export function App() {
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
@@ -175,6 +145,32 @@ export function App() {
     setTimeout(() => setNotification(null), 5000);
   };
 
+  // Создание нового проекта (полный сброс всех полей и геометрии до нуля)
+  const handleNewProject = () => {
+    if (project.title || project.clientName || rooms.length > 0) {
+      if (!confirm('Создать новый проект? Несохраненные изменения текущего расчета будут сброшены.')) {
+        return;
+      }
+    }
+    setProject({
+      id: crypto.randomUUID(),
+      title: '',
+      clientName: '',
+      phone: '',
+      address: '',
+      dealId: '',
+      createdAt: new Date().toISOString(),
+    });
+    setRooms([]);
+    setMaterials(INITIAL_MATERIALS.map((m) => ({ ...m, id: crypto.randomUUID(), quantity: 0 })));
+    setLastSavedAt(null);
+    setNotification({
+      type: 'success',
+      message: 'Создан новый пустой проект. Все поля и геометрия обнулены.',
+    });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col">
       {/* Шапка проекта с дашбордом, финансовыми карточками и кнопкой сохранения */}
@@ -187,7 +183,9 @@ export function App() {
         isSaving={isSaving}
         lastSavedAt={lastSavedAt}
         onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
+        onNewProject={handleNewProject}
       />
+
 
       {/* Всплывающее уведомление о статусе Supabase */}
       {notification && (
@@ -254,11 +252,20 @@ export function App() {
             </button>
             <button
               type="button"
+              onClick={handleNewProject}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+              title="Создать новый чистый расчет"
+            >
+              + Новый
+            </button>
+            <button
+              type="button"
               onClick={() => setIsProjectsModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
             >
               База проектов
             </button>
+
             <button
               type="button"
               onClick={() => window.print()}

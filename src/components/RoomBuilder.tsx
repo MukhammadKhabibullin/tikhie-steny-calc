@@ -30,19 +30,11 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   const handleAddRoom = () => {
     const newRoomIndex = rooms.length + 1;
     const newRoom: Room = {
-      id: 'room-' + Date.now(),
+      id: crypto.randomUUID(),
       name: `Комната ${newRoomIndex}`,
       ceilingHeight: 2700,
-      walls: [
-        { id: 'w-1-' + Date.now(), name: 'Стена А', length: 4500 },
-        { id: 'w-2-' + Date.now(), name: 'Стена Б', length: 3200 },
-        { id: 'w-3-' + Date.now(), name: 'Стена В', length: 4500 },
-        { id: 'w-4-' + Date.now(), name: 'Стена Г', length: 3200 },
-      ],
-      openings: [
-        { id: 'op-1-' + Date.now(), type: 'window', width: 1400, height: 1600 },
-        { id: 'op-2-' + Date.now(), type: 'door', width: 800, height: 2100 },
-      ],
+      walls: [],
+      openings: [],
     };
 
     const updated = [...rooms, newRoom];
@@ -51,16 +43,13 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   };
 
   const handleDeleteRoom = (roomId: string) => {
-    if (rooms.length <= 1) {
-      alert('В проекте должна оставаться минимум одна комната');
-      return;
-    }
     const updated = rooms.filter((r) => r.id !== roomId);
     onUpdateRooms(updated);
     if (activeRoomId === roomId) {
-      setActiveRoomId(updated[0].id);
+      setActiveRoomId(updated[0]?.id || '');
     }
   };
+
 
   const handleUpdateActiveRoom = (fields: Partial<Room>) => {
     if (!activeRoom) return;
@@ -73,7 +62,7 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     if (!activeRoom) return;
     const nextWallNum = activeRoom.walls.length + 1;
     const newWall: Wall = {
-      id: 'wall-' + Date.now(),
+      id: crypto.randomUUID(),
       name: `Стена ${nextWallNum}`,
       length: 3000,
     };
@@ -98,11 +87,12 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   const handleAddOpening = (type: OpeningType) => {
     if (!activeRoom) return;
     const newOpening: Opening = {
-      id: 'op-' + Date.now(),
+      id: crypto.randomUUID(),
       type,
       width: type === 'window' ? 1400 : 800,
       height: type === 'window' ? 1500 : 2100,
     };
+
     handleUpdateActiveRoom({
       openings: [...activeRoom.openings, newOpening],
     });
@@ -179,8 +169,9 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
         )}
       </div>
 
-      {activeRoom && (
+      {activeRoom ? (
         <div className="p-4 sm:p-6 space-y-6">
+
           {/* Верхняя панель активной комнаты: Название и Высота потолков */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
             <div>
@@ -499,7 +490,28 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
             </div>
           )}
         </div>
+      ) : (
+        <div className="p-10 text-center flex flex-col items-center justify-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800">Помещения не добавлены</h4>
+            <p className="text-xs text-slate-600 mt-1 max-w-sm">
+              Нажмите «Добавить комнату», чтобы задать высоту потолков, периметр стен и проемы с нуля.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddRoom}
+            className="mt-1 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            Добавить первое помещение
+          </button>
+        </div>
       )}
     </div>
   );
 };
+
