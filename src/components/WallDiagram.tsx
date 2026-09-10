@@ -6,7 +6,8 @@ interface WallDiagramProps {
   room: Room;
   hoveredWallId?: string | null;
   onHoverWall?: (wallId: string | null) => void;
-  onSelectWall?: (wallId: string) => void;
+  selectedWallId?: string | 'all';
+  onSelectWall?: (wallId: string | 'all') => void;
   hoveredOpeningId?: string | null;
   onHoverOpening?: (openingId: string | null) => void;
 }
@@ -512,6 +513,7 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
   room,
   hoveredWallId,
   onHoverWall,
+  selectedWallId: propSelectedWallId,
   onSelectWall,
   hoveredOpeningId,
   onHoverOpening,
@@ -520,8 +522,14 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
   const ceilingHeight = Number(room.ceilingHeight) || 2700;
   const openings = room.openings || [];
 
-  // Выбранная стена для детального просмотра или режим "Все стены"
-  const [selectedWallId, setSelectedWallId] = useState<string | 'all'>('all');
+  // Поддерживаем как контролируемый (через prop), так и внутренний выбор стены
+  const [internalSelectedWallId, setInternalSelectedWallId] = useState<string | 'all'>('all');
+  const selectedWallId = propSelectedWallId !== undefined ? propSelectedWallId : internalSelectedWallId;
+
+  const handleSelectWall = (wallId: string | 'all') => {
+    setInternalSelectedWallId(wallId);
+    onSelectWall?.(wallId);
+  };
 
   if (walls.length === 0) {
     return (
@@ -550,7 +558,7 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setSelectedWallId('all')}
+              onClick={() => handleSelectWall('all')}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
                 selectedWallId === 'all'
                   ? 'bg-slate-800 text-white shadow-2xs'
@@ -566,10 +574,7 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
                 <button
                   key={wall.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedWallId(wall.id);
-                    onSelectWall?.(wall.id);
-                  }}
+                  onClick={() => handleSelectWall(wall.id)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1.5 ${
                     isCurrent
                       ? 'bg-blue-600 text-white shadow-2xs'
@@ -612,10 +617,7 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
               hoveredOpeningId={hoveredOpeningId}
               onHoverOpening={onHoverOpening}
               isSelected={hoveredWallId === wall.id}
-              onSelect={() => {
-                setSelectedWallId(wall.id);
-                onSelectWall?.(wall.id);
-              }}
+              onSelect={() => handleSelectWall(wall.id)}
               onMouseEnter={() => onHoverWall?.(wall.id)}
               onMouseLeave={() => onHoverWall?.(null)}
             />
@@ -630,7 +632,7 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
           hoveredOpeningId={hoveredOpeningId}
           onHoverOpening={onHoverOpening}
           isSelected={true}
-          onSelect={() => onSelectWall?.(activeWall.id)}
+          onSelect={() => handleSelectWall(activeWall.id)}
           onMouseEnter={() => onHoverWall?.(activeWall.id)}
           onMouseLeave={() => onHoverWall?.(null)}
         />

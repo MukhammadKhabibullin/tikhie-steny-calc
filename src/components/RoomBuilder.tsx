@@ -26,10 +26,10 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   const [activeRoomId, setActiveRoomId] = useState<string>(rooms[0]?.id || '');
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
+  const [selectedWallId, setSelectedWallId] = useState<string | 'all'>('all');
 
   // Выбираем активную комнату
   const activeRoom = rooms.find((r) => r.id === activeRoomId) || rooms[0];
-
 
   const handleAddRoom = () => {
     const newRoomIndex = rooms.length + 1;
@@ -44,6 +44,7 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     const updated = [...rooms, newRoom];
     onUpdateRooms(updated);
     setActiveRoomId(newRoom.id);
+    setSelectedWallId('all');
   };
 
   const handleDeleteRoom = (roomId: string) => {
@@ -52,8 +53,8 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     if (activeRoomId === roomId) {
       setActiveRoomId(updated[0]?.id || '');
     }
+    setSelectedWallId('all');
   };
-
 
   const handleUpdateActiveRoom = (fields: Partial<Room>) => {
     if (!activeRoom) return;
@@ -83,25 +84,62 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
 
   const handleDeleteWall = (wallId: string) => {
     if (!activeRoom) return;
-    const updatedWalls = activeRoom.walls.filter((w) => w.id !== wallId);
-    handleUpdateActiveRoom({ walls: updatedWalls });
+    const remainingWalls = activeRoom.walls.filter((w) => w.id !== wallId);
+    const fallbackWallId = remainingWalls[0]?.id;
+
+    // Переносим проемы с удаленной стены на оставшуюся первую стену
+    const updatedOpenings = activeRoom.openings.map((op) => {
+      if (op.wallId === wallId) {
+        return { ...op, wallId: fallbackWallId };
+      }
+      return op;
+    });
+
+    handleUpdateActiveRoom({
+      walls: remainingWalls,
+      openings: updatedOpenings,
+    });
+
+    if (selectedWallId === wallId) {
+      setSelectedWallId('all');
+    }
   };
 
   // Управление проемами (окна / двери)
   const handleAddOpening = (type: OpeningType) => {
     if (!activeRoom) return;
-    const defaultWallId = activeRoom.walls.length > 0 ? activeRoom.walls[0].id : undefined;
+
+    let targetWallId: string | undefined = undefined;
+
+    // 1. Если выбрана конкретная стена (не 'all') и она существует в комнате
+    if (selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId)) {
+      targetWallId = selectedWallId;
+    } else if (activeRoom.walls.length > 0) {
+      // 2. Иначе ищем первую свободную стену, на которой еще нет проемов
+      const occupiedWallIds = new Set(
+        activeRoom.openings
+          .map((o) => o.wallId)
+          .filter((id): id is string => Boolean(id))
+      );
+      const freeWall = activeRoom.walls.find((w) => !occupiedWallIds.has(w.id));
+      targetWallId = freeWall ? freeWall.id : activeRoom.walls[0].id;
+    }
+
     const newOpening: Opening = {
       id: crypto.randomUUID(),
       type,
       width: type === 'window' ? 1400 : 800,
       height: type === 'window' ? 1500 : 2100,
-      wallId: defaultWallId,
+      wallId: targetWallId,
     };
 
     handleUpdateActiveRoom({
       openings: [...activeRoom.openings, newOpening],
     });
+
+    // Мягкая подсветка созданного проема на чертеже
+    setHoveredOpeningId(newOpening.id);
+    setTimeout(() => setHoveredOpeningId(null), 2000);
   };
 
   const handleUpdateOpening = (openingId: string, fields: Partial<Opening>) => {
@@ -274,20 +312,29 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                 ) : (
                   activeRoom.walls.map((wall, index) => {
                     const isHovered = hoveredWallId === wall.id;
+                    const isSelected = selectedWallId === wall.id;
+                    const wallOpeningsCount = activeRoom.openings.filter((o) =>
+                      o.wallId ? o.wallId === wall.id : index === 0
+                    ).length;
+
                     return (
                       <div
                         key={wall.id}
+                        onClick={() => setSelectedWallId(wall.id)}
                         onMouseEnter={() => setHoveredWallId(wall.id)}
                         onMouseLeave={() => setHoveredWallId(null)}
-                        className={`flex items-center gap-2 p-2 rounded-lg border shadow-2xs transition ${
-                          isHovered
-                            ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500/20'
+                        className={`flex items-center gap-2 p-2 rounded-lg border shadow-2xs transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/20'
+                            : isHovered
+                            ? 'bg-blue-50/40 border-blue-300'
                             : 'bg-white border-slate-200/70 hover:border-slate-300'
                         }`}
+                        title="Нажмите, чтобы сфокусироваться на этой стене на чертеже"
                       >
                         <span
                           className={`w-6 h-6 rounded-md text-xs font-bold flex items-center justify-center shrink-0 transition ${
-                            isHovered ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                            isSelected || isHovered ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
                           }`}
                         >
                           {index + 1}
@@ -295,11 +342,12 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                         <input
                           type="text"
                           value={wall.name}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleUpdateWall(wall.id, { name: e.target.value })}
                           className="w-1/3 text-xs font-medium text-slate-700 bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-400 rounded px-2 py-1 outline-none"
                           placeholder="Название"
                         />
-                        <div className="relative flex-1">
+                        <div className="relative flex-1" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="number"
                             value={wall.length}
@@ -314,12 +362,23 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                             мм
                           </span>
                         </div>
-                        <span className="text-xs text-slate-600 font-mono w-16 text-right">
+                        <span className="text-xs text-slate-600 font-mono w-16 text-right shrink-0">
                           {(wall.length / 1000).toFixed(2)} м
                         </span>
+                        {wallOpeningsCount > 0 && (
+                          <span
+                            className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                            title={`Проемов на стене ${index + 1}: ${wallOpeningsCount}`}
+                          >
+                            {wallOpeningsCount} пр.
+                          </span>
+                        )}
                         <button
-                          onClick={() => handleDeleteWall(wall.id)}
-                          className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteWall(wall.id);
+                          }}
+                          className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition shrink-0"
                           title="Удалить стену"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -336,6 +395,8 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                   room={activeRoom}
                   hoveredWallId={hoveredWallId}
                   onHoverWall={setHoveredWallId}
+                  selectedWallId={selectedWallId}
+                  onSelectWall={setSelectedWallId}
                   hoveredOpeningId={hoveredOpeningId}
                   onHoverOpening={setHoveredOpeningId}
                 />
@@ -356,18 +417,44 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                 <button
                   type="button"
                   onClick={() => handleAddOpening('window')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded-lg border border-amber-200 transition"
+                  className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200 transition shadow-2xs"
+                  title={
+                    selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId)
+                      ? `Добавить окно на выбранную стену (${activeRoom.walls.find((w) => w.id === selectedWallId)?.name || 'Стена'})`
+                      : 'Добавить окно'
+                  }
                 >
                   <AppWindow className="w-3.5 h-3.5" />
                   + Окно
+                  {selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId) && (
+                    <span className="text-[10px] text-amber-900/70 font-mono">
+                      (
+                      {activeRoom.walls.find((w) => w.id === selectedWallId)?.name ||
+                        `Стена ${activeRoom.walls.findIndex((w) => w.id === selectedWallId) + 1}`}
+                      )
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAddOpening('door')}
-                  className="inline-flex items-center gap-1 text-xs font-semibold bg-orange-50 text-orange-800 hover:bg-orange-100 px-2 py-1 rounded-lg border border-orange-200 transition"
+                  className="inline-flex items-center gap-1 text-xs font-semibold bg-orange-50 text-orange-800 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200 transition shadow-2xs"
+                  title={
+                    selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId)
+                      ? `Добавить дверь на выбранную стену (${activeRoom.walls.find((w) => w.id === selectedWallId)?.name || 'Стена'})`
+                      : 'Добавить дверь'
+                  }
                 >
                   <DoorOpen className="w-3.5 h-3.5" />
                   + Дверь
+                  {selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId) && (
+                    <span className="text-[10px] text-orange-900/70 font-mono">
+                      (
+                      {activeRoom.walls.find((w) => w.id === selectedWallId)?.name ||
+                        `Стена ${activeRoom.walls.findIndex((w) => w.id === selectedWallId) + 1}`}
+                      )
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -422,21 +509,38 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                         </select>
 
                         {/* Привязка проема к конкретной стене помещения */}
-                        {activeRoom.walls.length > 0 && (
-                          <select
-                            value={op.wallId || activeRoom.walls[0].id}
-                            onChange={(e) =>
-                              handleUpdateOpening(op.id, { wallId: e.target.value })
-                            }
-                            className="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 outline-none cursor-pointer max-w-[130px] truncate"
-                            title="Стена, на которой расположен данный проем"
-                          >
-                            {activeRoom.walls.map((w, idx) => (
-                              <option key={w.id} value={w.id}>
-                                {w.name ? w.name : `Стена ${idx + 1}`} ({w.length}мм)
-                              </option>
-                            ))}
-                          </select>
+                        {activeRoom.walls.length > 0 ? (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                              Стена:
+                            </span>
+                            <select
+                              value={
+                                op.wallId && activeRoom.walls.some((w) => w.id === op.wallId)
+                                  ? op.wallId
+                                  : activeRoom.walls[0].id
+                              }
+                              onChange={(e) => {
+                                const nextWallId = e.target.value;
+                                handleUpdateOpening(op.id, { wallId: nextWallId });
+                                if (selectedWallId !== 'all') {
+                                  setSelectedWallId(nextWallId);
+                                }
+                              }}
+                              className="text-xs font-semibold text-blue-800 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 rounded-lg px-2 py-1 outline-none cursor-pointer max-w-[150px] truncate transition focus:ring-2 focus:ring-blue-500"
+                              title="Выберите стену, на которую привязать данный проем"
+                            >
+                              {activeRoom.walls.map((w, idx) => (
+                                <option key={w.id} value={w.id}>
+                                  {w.name ? w.name : `Стена ${idx + 1}`} ({w.length}мм)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Нет стен
+                          </span>
                         )}
 
                         {/* Ширина */}
