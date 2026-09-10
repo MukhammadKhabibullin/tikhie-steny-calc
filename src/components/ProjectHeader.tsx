@@ -14,7 +14,8 @@ import {
   Ruler,
   CloudUpload,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -26,6 +27,7 @@ interface ProjectHeaderProps {
   isSaving: boolean;
   lastSavedAt: string | null;
   onOpenProjectsModal?: () => void;
+  onOpenCatalogModal?: () => void;
   onNewProject?: () => void;
 }
 
@@ -38,6 +40,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   isSaving,
   lastSavedAt,
   onOpenProjectsModal,
+  onOpenCatalogModal,
   onNewProject,
 }) => {
   const formatCurrency = (val: number) => {
@@ -143,6 +146,17 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   title="Список проектов в Supabase"
                 >
                   База
+                </button>
+              )}
+              {onOpenCatalogModal && (
+                <button
+                  type="button"
+                  onClick={onOpenCatalogModal}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center gap-1.5 shadow-2xs"
+                  title="Каталог материалов и прайс-лист в Supabase"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Прайс-лист</span>
                 </button>
               )}
 

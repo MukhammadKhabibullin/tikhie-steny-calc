@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { MaterialItem, MaterialCategory, UnitType } from '../types';
+import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
 import { calculateProfilePieces } from '../utils/calculator';
 import {
   Package,
@@ -9,7 +9,9 @@ import {
   ToggleRight,
   Sparkles,
   Search,
-  Filter
+  Filter,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 
 interface MaterialsSectionProps {
@@ -17,6 +19,10 @@ interface MaterialsSectionProps {
   onUpdateMaterials: (materials: MaterialItem[]) => void;
   calculatedFabricArea: number;
   calculatedProfileLength: number;
+  catalog?: CatalogMaterialItem[];
+  onOpenCatalogModal?: () => void;
+  onSyncPricesWithCatalog?: () => void;
+  onAddCatalogItem?: (item: CatalogMaterialItem) => void;
 }
 
 const CATEGORY_NAMES: Record<MaterialCategory, string> = {
@@ -35,6 +41,10 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
   onUpdateMaterials,
   calculatedFabricArea,
   calculatedProfileLength,
+  catalog,
+  onOpenCatalogModal,
+  onSyncPricesWithCatalog,
+  onAddCatalogItem,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,21 +65,58 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
   };
 
   const handleAddItem = (category: MaterialCategory = 'fabric') => {
+    const matchingCatalog = catalog?.find((c) => c.category === category);
     const defaultUnit: UnitType =
-      category === 'fabric' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs';
+      matchingCatalog?.unit || (category === 'fabric' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs');
 
     const newItem: MaterialItem = {
-      id: 'mat-' + Date.now(),
+      id: crypto.randomUUID(),
+      catalogId: matchingCatalog?.id,
       category,
-      name: `Новый материал (${CATEGORY_NAMES[category]})`,
+      name: matchingCatalog ? matchingCatalog.name : `Новый материал (${CATEGORY_NAMES[category]})`,
       unit: defaultUnit,
-      costPrice: 500,
-      clientPrice: 900,
+      costPrice: matchingCatalog ? matchingCatalog.costPrice : 500,
+      clientPrice: matchingCatalog ? matchingCatalog.clientPrice : 900,
       quantity: category === 'fabric' ? calculatedFabricArea : 10,
       profileUnitMode: 'm',
     };
 
     onUpdateMaterials([...materials, newItem]);
+  };
+
+  const handleAddFromCatalog = (catItem: CatalogMaterialItem) => {
+    if (onAddCatalogItem) {
+      onAddCatalogItem(catItem);
+      return;
+    }
+    const newItem: MaterialItem = {
+      id: crypto.randomUUID(),
+      catalogId: catItem.id,
+      category: catItem.category,
+      name: catItem.name,
+      unit: catItem.unit,
+      costPrice: catItem.costPrice,
+      clientPrice: catItem.clientPrice,
+      quantity: catItem.category === 'fabric' ? calculatedFabricArea : 10,
+      profileUnitMode: 'm',
+    };
+    onUpdateMaterials([...materials, newItem]);
+  };
+
+  const handleSelectCatalogItemForLine = (lineId: string, catItem: CatalogMaterialItem) => {
+    const updated = materials.map((item) => {
+      if (item.id !== lineId) return item;
+      return {
+        ...item,
+        catalogId: catItem.id,
+        category: catItem.category,
+        name: catItem.name,
+        unit: catItem.unit,
+        costPrice: catItem.costPrice,
+        clientPrice: catItem.clientPrice,
+      };
+    });
+    onUpdateMaterials(updated);
   };
 
   // Автоматическая привязка объемов из геометрии комнат
@@ -156,6 +203,37 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Кнопка открытия каталога Supabase */}
+          {onOpenCatalogModal && (
+            <button
+              type="button"
+              onClick={onOpenCatalogModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition shadow-2xs"
+              title="Открыть каталог материалов и прайс-лист в Supabase"
+            >
+              <Database className="w-3.5 h-3.5 text-blue-600" />
+              <span>Каталог БД</span>
+              {catalog && catalog.length > 0 && (
+                <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                  {catalog.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Кнопка синхронизации цен с каталогом */}
+          {onSyncPricesWithCatalog && (
+            <button
+              type="button"
+              onClick={onSyncPricesWithCatalog}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shadow-2xs"
+              title="Обновить цены в смете по актуальному прайс-листу Supabase"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Синхронизировать цены</span>
+            </button>
+          )}
+
           {/* Переключатель для профилей: В метрах / В штуках по 2м */}
           <button
             type="button"
@@ -234,6 +312,31 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
             );
           })}
 
+          {/* Быстрое добавление из каталога БД */}
+          {catalog && catalog.length > 0 && (
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const found = catalog.find((c) => c.id === e.target.value);
+                if (found) {
+                  handleAddFromCatalog(found);
+                  e.target.value = '';
+                }
+              }}
+              className="text-xs bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200 text-blue-800 font-semibold rounded-lg px-2.5 py-1 outline-none cursor-pointer max-w-[170px] truncate shrink-0"
+              title="Добавить позицию напрямую из каталога Supabase"
+            >
+              <option value="" disabled>+ Из каталога БД...</option>
+              {catalog
+                .filter((c) => selectedCategory === 'all' || c.category === selectedCategory)
+                .map((catItem) => (
+                  <option key={catItem.id} value={catItem.id}>
+                    {catItem.name} ({catItem.clientPrice} ₽/{catItem.unit})
+                  </option>
+                ))}
+            </select>
+          )}
+
           <button
             type="button"
             onClick={() =>
@@ -269,7 +372,7 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
             {filteredMaterials.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-slate-600">
-                  Нет материалов по выбранному фильтру. Нажмите «Добавить позицию» или выберите другую категорию.
+                  Нет материалов по выбранному фильтру. Нажмите «Добавить позицию» или выберите позицию из каталога.
                 </td>
               </tr>
             ) : (
@@ -285,7 +388,7 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
                     </td>
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <select
                             value={item.category}
                             onChange={(e) =>
@@ -301,6 +404,41 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
                               </option>
                             ))}
                           </select>
+
+                          {item.catalogId ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium border border-blue-200/60"
+                              title="Позиция связана с каталогом Supabase"
+                            >
+                              <Database className="w-2.5 h-2.5" />
+                              Каталог БД
+                            </span>
+                          ) : null}
+
+                          {/* Выпадающий список выбора из каталога текущей категории */}
+                          {catalog && catalog.some((c) => c.category === item.category) && (
+                            <select
+                              defaultValue=""
+                              onChange={(e) => {
+                                const found = catalog.find((c) => c.id === e.target.value);
+                                if (found) {
+                                  handleSelectCatalogItemForLine(item.id, found);
+                                  e.target.value = '';
+                                }
+                              }}
+                              className="text-[10px] text-slate-600 bg-transparent hover:bg-slate-100 rounded px-1 py-0.5 border border-dashed border-slate-300 outline-none cursor-pointer max-w-[150px] truncate ml-auto"
+                              title="Выбрать позицию из каталога для автозаполнения цен"
+                            >
+                              <option value="" disabled>Из каталога БД...</option>
+                              {catalog
+                                .filter((c) => c.category === item.category)
+                                .map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name} ({c.clientPrice} ₽)
+                                  </option>
+                                ))}
+                            </select>
+                          )}
                         </div>
                         <input
                           type="text"

@@ -35,6 +35,7 @@ export interface Room {
 
 export interface MaterialItem {
   id: string;
+  catalogId?: string; // ссылка на id в materials_catalog
   category: MaterialCategory;
   name: string;
   unit: UnitType;
@@ -43,6 +44,16 @@ export interface MaterialItem {
   quantity: number; // количество
   profileUnitMode?: 'm' | 'pcs'; // режим для профиля: метры или 2-метровые штуки
 }
+
+export interface CatalogMaterialItem {
+  id: string;
+  category: MaterialCategory;
+  name: string;
+  unit: UnitType;
+  costPrice: number; // cost_price
+  clientPrice: number; // client_price
+}
+
 
 export interface Project {
   id: string;

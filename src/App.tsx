@@ -1,11 +1,16 @@
-import { useState, useMemo } from 'react';
-import type { Project, Room, MaterialItem } from './types';
+import { useState, useMemo, useEffect } from 'react';
+import type { Project, Room, MaterialItem, CatalogMaterialItem } from './types';
 import { calculateProjectTotals, calculateTotalFabricArea, calculateTotalProfileLength } from './utils/calculator';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
 import { SavedProjectsModal } from './components/SavedProjectsModal';
-import { saveProjectToSupabase } from './services/supabaseClient';
+import { CatalogManagerModal } from './components/CatalogManagerModal';
+import {
+  saveProjectToSupabase,
+  fetchMaterialsCatalog,
+  seedDefaultCatalogIfEmpty
+} from './services/supabaseClient';
 import {
   FileSpreadsheet,
   Printer,
@@ -80,10 +85,53 @@ export function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogMaterialItem[]>([]);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Загрузка актуального каталога материалов из Supabase при старте приложения
+  useEffect(() => {
+    let isMounted = true;
+    const initCatalog = async () => {
+      try {
+        const items = await seedDefaultCatalogIfEmpty();
+        if (isMounted && items && items.length > 0) {
+          setCatalog(items);
+
+          // Синхронизируем закупочные и клиентские цены стартовых позиций с базой Supabase
+          setMaterials((prevMaterials) =>
+            prevMaterials.map((mat) => {
+              const matched = items.find(
+                (c) =>
+                  (mat.catalogId && c.id === mat.catalogId) ||
+                  c.name.trim().toLowerCase() === mat.name.trim().toLowerCase() ||
+                  c.category === mat.category
+              );
+              if (matched) {
+                return {
+                  ...mat,
+                  catalogId: matched.id,
+                  costPrice: matched.costPrice,
+                  clientPrice: matched.clientPrice,
+                };
+              }
+              return mat;
+            })
+          );
+        }
+      } catch (err) {
+        console.error('Ошибка инициализации каталога Supabase:', err);
+      }
+    };
+
+    initCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Расчет суммарных объемов геометрии
   const totalFabricArea = useMemo(() => calculateTotalFabricArea(rooms), [rooms]);
@@ -96,6 +144,73 @@ export function App() {
 
   const handleUpdateProject = (fields: Partial<Project>) => {
     setProject((prev) => ({ ...prev, ...fields }));
+  };
+
+  // Перезагрузка каталога из Supabase
+  const handleRefreshCatalog = async () => {
+    const items = await fetchMaterialsCatalog();
+    setCatalog(items);
+  };
+
+  // Синхронизация цен в текущей смете с базой данных
+  const handleSyncPricesWithCatalog = () => {
+    if (catalog.length === 0) {
+      setNotification({
+        type: 'error',
+        message: 'Каталог материалов в Supabase пуст или еще загружается.',
+      });
+      setTimeout(() => setNotification(null), 4000);
+      return;
+    }
+
+    let updatedCount = 0;
+    const updatedMaterials = materials.map((mat) => {
+      const matched = catalog.find(
+        (c) =>
+          (mat.catalogId && c.id === mat.catalogId) ||
+          c.name.trim().toLowerCase() === mat.name.trim().toLowerCase()
+      );
+      if (matched) {
+        updatedCount++;
+        return {
+          ...mat,
+          catalogId: matched.id,
+          costPrice: matched.costPrice,
+          clientPrice: matched.clientPrice,
+          unit: matched.unit,
+        };
+      }
+      return mat;
+    });
+
+    setMaterials(updatedMaterials);
+    setNotification({
+      type: 'success',
+      message: `Цены успешно синхронизированы с каталогом Supabase (${updatedCount} поз. обновлено)!`,
+    });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Добавление позиции из каталога напрямую в проект
+  const handleAddCatalogItemToProject = (catItem: CatalogMaterialItem) => {
+    const newItem: MaterialItem = {
+      id: crypto.randomUUID(),
+      catalogId: catItem.id,
+      category: catItem.category,
+      name: catItem.name,
+      unit: catItem.unit,
+      costPrice: catItem.costPrice,
+      clientPrice: catItem.clientPrice,
+      quantity: catItem.category === 'fabric' ? totalFabricArea : 10,
+      profileUnitMode: 'm',
+    };
+
+    setMaterials((prev) => [...prev, newItem]);
+    setNotification({
+      type: 'success',
+      message: `Позиция «${catItem.name}» добавлена в смету с актуальной ценой из базы!`,
+    });
+    setTimeout(() => setNotification(null), 4000);
   };
 
   // Сохранение в Supabase
@@ -162,7 +277,23 @@ export function App() {
       createdAt: new Date().toISOString(),
     });
     setRooms([]);
-    setMaterials(INITIAL_MATERIALS.map((m) => ({ ...m, id: crypto.randomUUID(), quantity: 0 })));
+    setMaterials(
+      INITIAL_MATERIALS.map((m) => {
+        const matched = catalog.find(
+          (c) =>
+            c.name.trim().toLowerCase() === m.name.trim().toLowerCase() ||
+            c.category === m.category
+        );
+        return {
+          ...m,
+          id: crypto.randomUUID(),
+          catalogId: matched?.id,
+          costPrice: matched ? matched.costPrice : m.costPrice,
+          clientPrice: matched ? matched.clientPrice : m.clientPrice,
+          quantity: 0,
+        };
+      })
+    );
     setLastSavedAt(null);
     setNotification({
       type: 'success',
@@ -183,6 +314,7 @@ export function App() {
         isSaving={isSaving}
         lastSavedAt={lastSavedAt}
         onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
+        onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
         onNewProject={handleNewProject}
       />
 
@@ -319,6 +451,10 @@ export function App() {
             onUpdateMaterials={setMaterials}
             calculatedFabricArea={totalFabricArea}
             calculatedProfileLength={totalProfileLength}
+            catalog={catalog}
+            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+            onSyncPricesWithCatalog={handleSyncPricesWithCatalog}
+            onAddCatalogItem={handleAddCatalogItemToProject}
           />
         </section>
 
@@ -364,6 +500,15 @@ export function App() {
         isOpen={isProjectsModalOpen}
         onClose={() => setIsProjectsModalOpen(false)}
         onSelectProject={handleSelectSavedProject}
+      />
+
+      {/* Модальное окно каталога материалов и прайс-листа Supabase */}
+      <CatalogManagerModal
+        isOpen={isCatalogModalOpen}
+        onClose={() => setIsCatalogModalOpen(false)}
+        catalog={catalog}
+        onRefreshCatalog={handleRefreshCatalog}
+        onAddToProject={handleAddCatalogItemToProject}
       />
     </div>
   );
