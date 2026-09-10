@@ -25,6 +25,7 @@ interface RoomBuilderProps {
 export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }) => {
   const [activeRoomId, setActiveRoomId] = useState<string>(rooms[0]?.id || '');
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+  const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
 
   // Выбираем активную комнату
   const activeRoom = rooms.find((r) => r.id === activeRoomId) || rooms[0];
@@ -89,11 +90,13 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   // Управление проемами (окна / двери)
   const handleAddOpening = (type: OpeningType) => {
     if (!activeRoom) return;
+    const defaultWallId = activeRoom.walls.length > 0 ? activeRoom.walls[0].id : undefined;
     const newOpening: Opening = {
       id: crypto.randomUUID(),
       type,
       width: type === 'window' ? 1400 : 800,
       height: type === 'window' ? 1500 : 2100,
+      wallId: defaultWallId,
     };
 
     handleUpdateActiveRoom({
@@ -333,6 +336,8 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                   room={activeRoom}
                   hoveredWallId={hoveredWallId}
                   onHoverWall={setHoveredWallId}
+                  hoveredOpeningId={hoveredOpeningId}
+                  onHoverOpening={setHoveredOpeningId}
                 />
               </div>
             </div>
@@ -376,10 +381,18 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                 ) : (
                   activeRoom.openings.map((op) => {
                     const areaM2 = ((op.width * op.height) / 1_000_000).toFixed(2);
+                    const isHovered = hoveredOpeningId === op.id;
+
                     return (
                       <div
                         key={op.id}
-                        className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs hover:border-slate-300 transition"
+                        onMouseEnter={() => setHoveredOpeningId(op.id)}
+                        onMouseLeave={() => setHoveredOpeningId(null)}
+                        className={`flex items-center gap-2 p-2 rounded-lg border transition-all duration-150 ${
+                          isHovered
+                            ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
+                            : 'bg-white border-slate-200/70 shadow-2xs hover:border-slate-300'
+                        }`}
                       >
                         <span
                           className={`w-6 h-6 rounded-md text-xs font-bold flex items-center justify-center shrink-0 ${
@@ -407,6 +420,24 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                           <option value="window">Окно</option>
                           <option value="door">Дверь</option>
                         </select>
+
+                        {/* Привязка проема к конкретной стене помещения */}
+                        {activeRoom.walls.length > 0 && (
+                          <select
+                            value={op.wallId || activeRoom.walls[0].id}
+                            onChange={(e) =>
+                              handleUpdateOpening(op.id, { wallId: e.target.value })
+                            }
+                            className="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 outline-none cursor-pointer max-w-[130px] truncate"
+                            title="Стена, на которой расположен данный проем"
+                          >
+                            {activeRoom.walls.map((w, idx) => (
+                              <option key={w.id} value={w.id}>
+                                {w.name ? w.name : `Стена ${idx + 1}`} ({w.length}мм)
+                              </option>
+                            ))}
+                          </select>
+                        )}
 
                         {/* Ширина */}
                         <div className="relative w-24">

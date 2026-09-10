@@ -23,6 +23,7 @@ export interface Opening {
   type: OpeningType;
   width: number; // в мм
   height: number; // в мм
+  wallId?: string; // ID стены, к которой привязан проем
 }
 
 export interface Room {
