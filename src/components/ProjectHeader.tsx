@@ -11,7 +11,10 @@ import {
   Hammer,
   ShoppingBag,
   Layers,
-  Ruler
+  Ruler,
+  CloudUpload,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -19,6 +22,10 @@ interface ProjectHeaderProps {
   onUpdateProject: (updated: Partial<Project>) => void;
   results: CalculationResult;
   roomCount: number;
+  onSaveProject: () => void;
+  isSaving: boolean;
+  lastSavedAt: string | null;
+  onOpenProjectsModal?: () => void;
 }
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -26,6 +33,10 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onUpdateProject,
   results,
   roomCount,
+  onSaveProject,
+  isSaving,
+  lastSavedAt,
+  onOpenProjectsModal,
 }) => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -61,50 +72,89 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             </div>
           </div>
 
-          {/* Быстрые метаданные клиента */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
-              <User className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <input
-                type="text"
-                value={project.clientName}
-                onChange={(e) => onUpdateProject({ clientName: e.target.value })}
-                placeholder="Имя клиента"
-                className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
-              />
+          {/* Быстрые метаданные клиента и кнопка сохранения */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs flex-1">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
+                <User className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <input
+                  type="text"
+                  value={project.clientName}
+                  onChange={(e) => onUpdateProject({ clientName: e.target.value })}
+                  placeholder="Имя клиента"
+                  className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
+                <Phone className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <input
+                  type="text"
+                  value={project.phone}
+                  onChange={(e) => onUpdateProject({ phone: e.target.value })}
+                  placeholder="+7 (___) ___-__-__"
+                  className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <input
+                  type="text"
+                  value={project.address}
+                  onChange={(e) => onUpdateProject({ address: e.target.value })}
+                  placeholder="Адрес объекта"
+                  className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
+                <FileText className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                <input
+                  type="text"
+                  value={project.dealId}
+                  onChange={(e) => onUpdateProject({ dealId: e.target.value })}
+                  placeholder="ID сделки / CRM"
+                  className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none font-mono"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
-              <Phone className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <input
-                type="text"
-                value={project.phone}
-                onChange={(e) => onUpdateProject({ phone: e.target.value })}
-                placeholder="+7 (___) ___-__-__"
-                className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
-              <MapPin className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <input
-                type="text"
-                value={project.address}
-                onChange={(e) => onUpdateProject({ address: e.target.value })}
-                placeholder="Адрес объекта"
-                className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5">
-              <FileText className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <input
-                type="text"
-                value={project.dealId}
-                onChange={(e) => onUpdateProject({ dealId: e.target.value })}
-                placeholder="ID сделки / CRM"
-                className="bg-transparent border-none p-0 text-slate-800 font-medium focus:ring-0 w-full outline-none font-mono"
-              />
+            {/* Кнопки сохранения и проектов */}
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+              {onOpenProjectsModal && (
+                <button
+                  type="button"
+                  onClick={onOpenProjectsModal}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition"
+                  title="Список проектов в Supabase"
+                >
+                  База
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onSaveProject}
+                disabled={isSaving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-sm ${
+                  isSaving
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 active:scale-98'
+                }`}
+                title="Сохранить проект, комнаты и стены в Supabase"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Сохранение...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    <span>Сохранить в БД</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -184,6 +234,19 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
           <div className="flex items-center gap-1.5 bg-slate-100/80 px-2.5 py-1 rounded-md">
             <Ruler className="w-3.5 h-3.5 text-slate-600" />
             <span>Профиль: <strong className="text-slate-800">{results.totalProfileLength} пог. м</strong></span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            {lastSavedAt ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Сохранено в Supabase ({new Date(lastSavedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
+                Не сохранено в БД
+              </span>
+            )}
           </div>
         </div>
       </div>

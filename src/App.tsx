@@ -4,11 +4,17 @@ import { calculateProjectTotals, calculateTotalFabricArea, calculateTotalProfile
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
+import { SavedProjectsModal } from './components/SavedProjectsModal';
+import { saveProjectToSupabase } from './services/supabaseClient';
 import {
   FileSpreadsheet,
   Printer,
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  CloudUpload,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 // Исходные демонстрационные данные в стиле "Тихие Стены"
@@ -100,6 +106,15 @@ export function App() {
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [materials, setMaterials] = useState<MaterialItem[]>(INITIAL_MATERIALS);
 
+  // Состояние сохранения в Supabase
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [notification, setNotification] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
   // Расчет суммарных объемов геометрии
   const totalFabricArea = useMemo(() => calculateTotalFabricArea(rooms), [rooms]);
   const totalProfileLength = useMemo(() => calculateTotalProfileLength(rooms), [rooms]);
@@ -113,15 +128,92 @@ export function App() {
     setProject((prev) => ({ ...prev, ...fields }));
   };
 
+  // Сохранение в Supabase
+  const handleSaveProject = async () => {
+    setIsSaving(true);
+    setNotification(null);
+    try {
+      const result = await saveProjectToSupabase(project, rooms);
+      if (result.success && result.savedProject) {
+        setProject(result.savedProject);
+        if (result.savedRooms && result.savedRooms.length > 0) {
+          setRooms(result.savedRooms);
+        }
+        setLastSavedAt(new Date().toISOString());
+        setNotification({
+          type: 'success',
+          message: `Проект «${result.savedProject.title}» и его геометрия успешно сохранены в Supabase!`,
+        });
+        setTimeout(() => setNotification(null), 5000);
+      } else {
+        setNotification({
+          type: 'error',
+          message: 'Ошибка при сохранении: ' + (result.error || 'Неизвестная ошибка'),
+        });
+      }
+    } catch (err: unknown) {
+      setNotification({
+        type: 'error',
+        message: 'Исключение при сохранении: ' + (err instanceof Error ? err.message : String(err)),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Загрузка сохраненного проекта из Supabase
+  const handleSelectSavedProject = (loadedProject: Project, loadedRooms: Room[]) => {
+    setProject(loadedProject);
+    if (loadedRooms && loadedRooms.length > 0) {
+      setRooms(loadedRooms);
+    }
+    setLastSavedAt(new Date().toISOString());
+    setNotification({
+      type: 'success',
+      message: `Проект «${loadedProject.title}» успешно загружен из Supabase!`,
+    });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col">
-      {/* Шапка проекта с дашбордом и финансовыми карточками */}
+      {/* Шапка проекта с дашбордом, финансовыми карточками и кнопкой сохранения */}
       <ProjectHeader
         project={project}
         onUpdateProject={handleUpdateProject}
         results={totals}
         roomCount={rooms.length}
+        onSaveProject={handleSaveProject}
+        isSaving={isSaving}
+        lastSavedAt={lastSavedAt}
+        onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
       />
+
+      {/* Всплывающее уведомление о статусе Supabase */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-md animate-in slide-in-from-bottom-5 duration-200">
+          <div
+            className={`p-4 rounded-xl shadow-lg border flex items-start gap-3 ${
+              notification.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}
+          >
+            {notification.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            )}
+            <div className="text-xs font-medium flex-1">{notification.message}</div>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Основной контент */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
@@ -141,22 +233,47 @@ export function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+          <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
             <button
               type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+              onClick={handleSaveProject}
+              disabled={isSaving}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition shadow-sm border border-emerald-400/40"
             >
-              <Printer className="w-3.5 h-3.5" />
-              Печать / PDF
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Сохранение...
+                </>
+              ) : (
+                <>
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  Сохранить проект
+                </>
+              )}
             </button>
             <button
               type="button"
-              onClick={() => alert('Смета экспортирована в буфер обмена!')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 transition shadow-sm"
+              onClick={() => setIsProjectsModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+            >
+              База проектов
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Печать
+            </button>
+            <button
+              type="button"
+              onClick={() => alert('Смета скопирована в буфер обмена!')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 transition shadow-sm"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
-              Экспорт сметы
+              Экспорт
             </button>
           </div>
         </div>
@@ -234,7 +351,17 @@ export function App() {
           © {new Date().getFullYear()} «Тихие Стены» — Профессиональный калькулятор тканевой звукоизоляции и отделки стен.
         </div>
       </footer>
+
+
+      {/* Модальное окно базы сохраненных проектов */}
+      <SavedProjectsModal
+        isOpen={isProjectsModalOpen}
+        onClose={() => setIsProjectsModalOpen(false)}
+        onSelectProject={handleSelectSavedProject}
+      />
     </div>
   );
 }
+
+
 export default App;
