@@ -3,6 +3,7 @@ import type { Room, Wall, Opening, OpeningType } from '../types';
 import {
   calculateRoomMetrics
 } from '../utils/calculator';
+import { WallDiagram } from './WallDiagram';
 import {
   Plus,
   Trash2,
@@ -23,9 +24,11 @@ interface RoomBuilderProps {
 
 export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }) => {
   const [activeRoomId, setActiveRoomId] = useState<string>(rooms[0]?.id || '');
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
 
   // Выбираем активную комнату
   const activeRoom = rooms.find((r) => r.id === activeRoomId) || rooms[0];
+
 
   const handleAddRoom = () => {
     const newRoomIndex = rooms.length + 1;
@@ -231,107 +234,139 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
             </div>
           </div>
 
-          {/* Сетка: Стены и Проемы */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Блок 1: Стены комнаты */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Square className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                    Стены периметра ({activeRoom.walls.length})
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleAddWall}
-                  className="inline-flex items-center gap-1 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/70 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Добавить стену
-                </button>
+          {/* Блок 1: Стены комнаты и графическая схема-развертка */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Square className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                  Геометрия и стены помещения ({activeRoom.walls.length})
+                </h3>
               </div>
+              <button
+                type="button"
+                onClick={handleAddWall}
+                className="inline-flex items-center gap-1 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200/70 transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Добавить стену
+              </button>
+            </div>
 
-              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200/80 space-y-2 max-h-[320px] overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* Левая колонка: список стен для редактирования */}
+              <div className="lg:col-span-5 bg-slate-50/50 rounded-xl p-3 border border-slate-200/80 space-y-2 max-h-[350px] overflow-y-auto">
                 {activeRoom.walls.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-slate-600">
-                    Нет стен. Нажмите «Добавить стену» для формирования периметра.
+                  <div className="text-center py-8 text-xs text-slate-600 space-y-2">
+                    <p>Нет стен. Нажмите «Добавить стену» для формирования контура.</p>
+                    <button
+                      type="button"
+                      onClick={handleAddWall}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Добавить первую стену
+                    </button>
                   </div>
                 ) : (
-                  activeRoom.walls.map((wall, index) => (
-                    <div
-                      key={wall.id}
-                      className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200/70 shadow-2xs hover:border-slate-300 transition"
-                    >
-                      <span className="w-6 h-6 rounded-md bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center shrink-0">
-                        {index + 1}
-                      </span>
-                      <input
-                        type="text"
-                        value={wall.name}
-                        onChange={(e) => handleUpdateWall(wall.id, { name: e.target.value })}
-                        className="w-1/3 text-xs font-medium text-slate-700 bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-400 rounded px-2 py-1 outline-none"
-                        placeholder="Название"
-                      />
-                      <div className="relative flex-1">
-                        <input
-                          type="number"
-                          value={wall.length}
-                          onChange={(e) =>
-                            handleUpdateWall(wall.id, { length: Number(e.target.value) || 0 })
-                          }
-                          className="w-full text-xs font-mono font-semibold text-slate-900 bg-slate-50/80 border border-slate-200 rounded-md px-2 py-1 pr-9 outline-none focus:ring-1 focus:ring-blue-500"
-                          min={100}
-                          step={50}
-                        />
-                        <span className="absolute right-2 top-1 text-[11px] text-slate-600 font-mono">
-                          мм
-                        </span>
-                      </div>
-                      <span className="text-xs text-slate-600 font-mono w-16 text-right">
-                        {(wall.length / 1000).toFixed(2)} м
-                      </span>
-                      <button
-                        onClick={() => handleDeleteWall(wall.id)}
-                        className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
-                        title="Удалить стену"
+                  activeRoom.walls.map((wall, index) => {
+                    const isHovered = hoveredWallId === wall.id;
+                    return (
+                      <div
+                        key={wall.id}
+                        onMouseEnter={() => setHoveredWallId(wall.id)}
+                        onMouseLeave={() => setHoveredWallId(null)}
+                        className={`flex items-center gap-2 p-2 rounded-lg border shadow-2xs transition ${
+                          isHovered
+                            ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500/20'
+                            : 'bg-white border-slate-200/70 hover:border-slate-300'
+                        }`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))
+                        <span
+                          className={`w-6 h-6 rounded-md text-xs font-bold flex items-center justify-center shrink-0 transition ${
+                            isHovered ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={wall.name}
+                          onChange={(e) => handleUpdateWall(wall.id, { name: e.target.value })}
+                          className="w-1/3 text-xs font-medium text-slate-700 bg-transparent border border-transparent hover:border-slate-200 focus:border-blue-400 rounded px-2 py-1 outline-none"
+                          placeholder="Название"
+                        />
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            value={wall.length}
+                            onChange={(e) =>
+                              handleUpdateWall(wall.id, { length: Number(e.target.value) || 0 })
+                            }
+                            className="w-full text-xs font-mono font-semibold text-slate-900 bg-slate-50/80 border border-slate-200 rounded-md px-2 py-1 pr-9 outline-none focus:ring-1 focus:ring-blue-500"
+                            min={100}
+                            step={50}
+                          />
+                          <span className="absolute right-2 top-1 text-[11px] text-slate-600 font-mono">
+                            мм
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-600 font-mono w-16 text-right">
+                          {(wall.length / 1000).toFixed(2)} м
+                        </span>
+                        <button
+                          onClick={() => handleDeleteWall(wall.id)}
+                          className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
+                          title="Удалить стену"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
+              </div>
+
+              {/* Правая колонка: Графическая схема-развертка стен (SVG) */}
+              <div className="lg:col-span-7">
+                <WallDiagram
+                  room={activeRoom}
+                  hoveredWallId={hoveredWallId}
+                  onHoverWall={setHoveredWallId}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Блок 2: Оконные и дверные проемы */}
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Maximize2 className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                  Проемы (вычеты) ({activeRoom.openings.length})
+                </h3>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleAddOpening('window')}
+                  className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded-lg border border-amber-200 transition"
+                >
+                  <AppWindow className="w-3.5 h-3.5" />
+                  + Окно
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddOpening('door')}
+                  className="inline-flex items-center gap-1 text-xs font-semibold bg-orange-50 text-orange-800 hover:bg-orange-100 px-2 py-1 rounded-lg border border-orange-200 transition"
+                >
+                  <DoorOpen className="w-3.5 h-3.5" />
+                  + Дверь
+                </button>
               </div>
             </div>
 
-            {/* Блок 2: Оконные и дверные проемы */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Maximize2 className="w-4 h-4 text-amber-600" />
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                    Проемы (вычеты) ({activeRoom.openings.length})
-                  </h3>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAddOpening('window')}
-                    className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2 py-1 rounded-lg border border-amber-200 transition"
-                  >
-                    <AppWindow className="w-3.5 h-3.5" />
-                    + Окно
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddOpening('door')}
-                    className="inline-flex items-center gap-1 text-xs font-semibold bg-orange-50 text-orange-800 hover:bg-orange-100 px-2 py-1 rounded-lg border border-orange-200 transition"
-                  >
-                    <DoorOpen className="w-3.5 h-3.5" />
-                    + Дверь
-                  </button>
-                </div>
-              </div>
 
               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200/80 space-y-2 max-h-[320px] overflow-y-auto">
                 {activeRoom.openings.length === 0 ? (
@@ -424,9 +459,9 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                 )}
               </div>
             </div>
-          </div>
 
           {/* Итоги геометрии активной комнаты */}
+
           {currentMetrics && (
             <div className="bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-50 p-4 rounded-xl border border-blue-100 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2">
