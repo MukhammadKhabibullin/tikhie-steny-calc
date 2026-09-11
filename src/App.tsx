@@ -1,16 +1,23 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { Project, Room, MaterialItem, CatalogMaterialItem } from './types';
+import type { Project, Room, MaterialItem, CatalogMaterialItem, Organization } from './types';
 import { calculateProjectTotals, calculateTotalFabricArea, calculateTotalProfileLength } from './utils/calculator';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
 import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { CatalogManagerModal } from './components/CatalogManagerModal';
+import { AuthScreen } from './components/AuthScreen';
+import { CompanyProfileModal } from './components/CompanyProfileModal';
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
-  seedDefaultCatalogIfEmpty
+  seedDefaultCatalogIfEmpty,
+  getCurrentSession,
+  fetchUserOrganization,
+  signOutUser,
+  supabase,
 } from './services/supabaseClient';
+import type { User, Session } from './services/supabaseClient';
 import {
   FileSpreadsheet,
   Printer,
@@ -25,6 +32,7 @@ import {
 // Чистое начальное состояние (все поля и показатели пустые/нулевые)
 const INITIAL_PROJECT: Project = {
   id: crypto.randomUUID(),
+  organizationId: null,
   title: '',
   clientName: '',
   phone: '',
@@ -77,6 +85,16 @@ const INITIAL_MATERIALS: MaterialItem[] = [
 
 
 export function App() {
+  // Состояние авторизации Supabase Auth
+  const [session, setSession] = useState<Session | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Профиль компании (Organization)
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [isFirstSetupModal, setIsFirstSetupModal] = useState(false);
+
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [materials, setMaterials] = useState<MaterialItem[]>(INITIAL_MATERIALS);
@@ -91,6 +109,62 @@ export function App() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Проверка сессии пользователя и загрузка профиля компании при старте
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkAuthAndOrg = async () => {
+      try {
+        const currentSession = await getCurrentSession();
+        if (isMounted) {
+          setSession(currentSession);
+          setCurrentUser(currentSession?.user || null);
+
+          if (currentSession?.user) {
+            const org = await fetchUserOrganization(currentSession.user);
+            if (isMounted && org) {
+              setOrganization(org);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка проверки сессии пользователя:', err);
+      } finally {
+        if (isMounted) {
+          setAuthChecking(false);
+        }
+      }
+    };
+
+    checkAuthAndOrg();
+
+    // Подписка на изменение состояния авторизации
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!isMounted) return;
+      setSession(newSession);
+      setCurrentUser(newSession?.user || null);
+
+      if (event === 'SIGNED_IN' && newSession?.user) {
+        const org = await fetchUserOrganization(newSession.user);
+        if (isMounted) {
+          if (org) {
+            setOrganization(org);
+          } else {
+            setIsFirstSetupModal(true);
+            setIsCompanyModalOpen(true);
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setOrganization(null);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   // Загрузка актуального каталога материалов из Supabase при старте приложения
   useEffect(() => {
@@ -218,7 +292,11 @@ export function App() {
     setIsSaving(true);
     setNotification(null);
     try {
-      const result = await saveProjectToSupabase(project, rooms);
+      const projectToSave: Project = {
+        ...project,
+        organizationId: organization?.id || project.organizationId || null,
+      };
+      const result = await saveProjectToSupabase(projectToSave, rooms);
       if (result.success && result.savedProject) {
         setProject(result.savedProject);
         if (result.savedRooms && result.savedRooms.length > 0) {
@@ -269,6 +347,7 @@ export function App() {
     }
     setProject({
       id: crypto.randomUUID(),
+      organizationId: organization?.id || null,
       title: '',
       clientName: '',
       phone: '',
@@ -302,6 +381,47 @@ export function App() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Обработчик успешной авторизации
+  const handleAuthSuccess = async (user: User, newSession: Session, isNewRegistration?: boolean) => {
+    setSession(newSession);
+    setCurrentUser(user);
+
+    const org = await fetchUserOrganization(user);
+    if (org) {
+      setOrganization(org);
+    }
+
+    if (isNewRegistration || !org || !org.name) {
+      setIsFirstSetupModal(true);
+      setIsCompanyModalOpen(true);
+    }
+  };
+
+  // Выход из системы
+  const handleLogout = async () => {
+    await signOutUser();
+    setSession(null);
+    setCurrentUser(null);
+    setOrganization(null);
+  };
+
+  // Экран проверки авторизации при первоначальной загрузке
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-300">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <span className="text-sm font-medium">Проверка авторизации...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Экран входа и регистрации, если пользователь не авторизован
+  if (!session) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col">
       {/* Шапка проекта с дашбордом, финансовыми карточками и кнопкой сохранения */}
@@ -313,9 +433,16 @@ export function App() {
         onSaveProject={handleSaveProject}
         isSaving={isSaving}
         lastSavedAt={lastSavedAt}
+        organization={organization}
+        userEmail={currentUser?.email}
         onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
         onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+        onOpenCompanyModal={() => {
+          setIsFirstSetupModal(false);
+          setIsCompanyModalOpen(true);
+        }}
         onNewProject={handleNewProject}
+        onLogout={handleLogout}
       />
 
 
@@ -509,6 +636,26 @@ export function App() {
         catalog={catalog}
         onRefreshCatalog={handleRefreshCatalog}
         onAddToProject={handleAddCatalogItemToProject}
+      />
+
+      {/* Модальное окно профиля компании */}
+      <CompanyProfileModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
+        organization={organization}
+        onSaveOrganization={(savedOrg) => {
+          setOrganization(savedOrg);
+          setProject((prev) => ({
+            ...prev,
+            organizationId: savedOrg.id,
+          }));
+          setNotification({
+            type: 'success',
+            message: `Профиль компании «${savedOrg.name}» успешно сохранен!`,
+          });
+          setTimeout(() => setNotification(null), 4000);
+        }}
+        isFirstSetup={isFirstSetupModal}
       />
     </div>
   );

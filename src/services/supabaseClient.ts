@@ -1,5 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Project, Room, Wall, Opening, CatalogMaterialItem, MaterialCategory, UnitType } from '../types';
+import type { User, Session } from '@supabase/supabase-js';
+import type {
+  Project,
+  Room,
+  Wall,
+  Opening,
+  CatalogMaterialItem,
+  MaterialCategory,
+  UnitType,
+  Organization
+} from '../types';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL || 'https://qkqbvyqbpflialjboahy.supabase.co';
@@ -8,6 +18,8 @@ const supabaseAnonKey =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrcWJ2eXFicGZsaWFsamJvYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjQwODIsImV4cCI6MjEwNDYwMDA4Mn0.u5eUt7wIeI2CYlqiYCXArUuz-XB3aQGszX-l_naBwIc';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export type { User, Session };
 
 /**
  * Проверка валидности UUID
@@ -65,17 +77,28 @@ export async function saveProjectToSupabase(
     });
 
     // 1. Сохраняем/обновляем проект в таблице 'projects'
-    const { error: projectError } = await supabase.from('projects').upsert(
-      {
-        id: projectId,
-        title: project.title.trim() || 'Без названия',
-        client_name: project.clientName?.trim() || null,
-        phone: project.phone?.trim() || null,
-        address: project.address?.trim() || null,
-        deal_id: project.dealId?.trim() || null,
-      },
-      { onConflict: 'id' }
-    );
+    const projectPayload: Record<string, unknown> = {
+      id: projectId,
+      title: project.title.trim() || 'Без названия',
+      client_name: project.clientName?.trim() || null,
+      phone: project.phone?.trim() || null,
+      address: project.address?.trim() || null,
+      deal_id: project.dealId?.trim() || null,
+    };
+    if (project.organizationId) {
+      projectPayload.organization_id = project.organizationId;
+    }
+
+    let { error: projectError } = await supabase.from('projects').upsert(projectPayload, {
+      onConflict: 'id',
+    });
+
+    // Fallback: если колонка organization_id еще не создана в БД, сохраняем без нее
+    if (projectError && projectError.message?.includes('organization_id')) {
+      delete projectPayload.organization_id;
+      const retry = await supabase.from('projects').upsert(projectPayload, { onConflict: 'id' });
+      projectError = retry.error;
+    }
 
     if (projectError) {
       console.error('Ошибка сохранения проекта в Supabase:', projectError);
@@ -148,28 +171,45 @@ export async function saveProjectToSupabase(
 }
 
 /**
- * Получение списка всех сохраненных проектов из Supabase
+ * Получение списка всех сохраненных проектов из Supabase (с поддержкой фильтрации по организации)
  */
-export async function fetchSavedProjects(): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id, title, client_name, phone, address, deal_id, created_at')
-    .order('created_at', { ascending: false });
+export async function fetchSavedProjects(organizationId?: string | null): Promise<Project[]> {
+  try {
+    let query = supabase.from('projects').select('*').order('created_at', { ascending: false });
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+    let { data, error } = await query;
 
-  if (error || !data) {
-    console.error('Ошибка загрузки проектов:', error);
+    // Fallback: если колонки organization_id еще нет в базе
+    if (error && error.message?.includes('organization_id')) {
+      const fallbackQuery = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+      data = fallbackQuery.data;
+      error = fallbackQuery.error;
+    }
+
+    if (error || !data) {
+      console.error('Ошибка загрузки проектов:', error);
+      return [];
+    }
+
+    return data.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id || null,
+      title: row.title || '',
+      clientName: row.client_name || '',
+      phone: row.phone || '',
+      address: row.address || '',
+      dealId: row.deal_id || '',
+      createdAt: row.created_at || '',
+    }));
+  } catch (err) {
+    console.error('Исключение при получении проектов:', err);
     return [];
   }
-
-  return data.map((row) => ({
-    id: row.id,
-    title: row.title || '',
-    clientName: row.client_name || '',
-    phone: row.phone || '',
-    address: row.address || '',
-    dealId: row.deal_id || '',
-    createdAt: row.created_at || '',
-  }));
 }
 
 /**
@@ -418,4 +458,286 @@ export async function deleteCatalogItemFromSupabase(
     };
   }
 }
+
+/* ==========================================================================
+   АВТОРИЗАЦИЯ SUPABASE AUTH
+   ========================================================================== */
+
+/**
+ * Регистрация пользователя по email и паролю
+ */
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  companyName?: string
+): Promise<{ user: User | null; session: Session | null; error?: string }> {
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          company_name: companyName?.trim() || '',
+        },
+      },
+    });
+
+    if (error) {
+      return { user: null, session: null, error: error.message };
+    }
+
+    return { user: data.user, session: data.session };
+  } catch (err) {
+    return {
+      user: null,
+      session: null,
+      error: err instanceof Error ? err.message : 'Ошибка регистрации',
+    };
+  }
+}
+
+/**
+ * Вход пользователя по email и паролю
+ */
+export async function signInWithEmail(
+  email: string,
+  password: string
+): Promise<{ user: User | null; session: Session | null; error?: string }> {
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      return { user: null, session: null, error: error.message };
+    }
+
+    return { user: data.user, session: data.session };
+  } catch (err) {
+    return {
+      user: null,
+      session: null,
+      error: err instanceof Error ? err.message : 'Ошибка входа',
+    };
+  }
+}
+
+/**
+ * Выход из аккаунта
+ */
+export async function signOutUser(): Promise<{ error?: string }> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) return { error: error.message };
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Ошибка выхода' };
+  }
+}
+
+/**
+ * Получение текущей активной сессии
+ */
+export async function getCurrentSession(): Promise<Session | null> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+    return data.session;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Получение текущего авторизованного пользователя
+ */
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
+/* ==========================================================================
+   ПРОФИЛЬ КОМПАНИИ (ORGANIZATION)
+   ========================================================================== */
+
+const LOCAL_ORG_KEY = 'tikhie_steny_organization';
+
+/**
+ * Преобразование локального файла изображения в base64 DataURL
+ */
+export function convertFileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Не удалось прочитать файл как изображение'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Ошибка чтения файла'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Загрузка профиля организации текущего пользователя
+ */
+export async function fetchUserOrganization(user?: User | null): Promise<Organization | null> {
+  try {
+    // 1. Попытка запросить из таблицы organizations в Supabase
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('id, name, logo_url, phone, email, inn, address, created_at')
+      .limit(1);
+
+    if (!error && data && data.length > 0) {
+      const row = data[0];
+      const org: Organization = {
+        id: row.id,
+        name: row.name || 'Моя компания',
+        logoUrl: row.logo_url || null,
+        phone: row.phone || '',
+        email: row.email || '',
+        inn: row.inn || '',
+        address: row.address || '',
+        createdAt: row.created_at || '',
+      };
+      // Кэшируем локально
+      try {
+        localStorage.setItem(LOCAL_ORG_KEY, JSON.stringify(org));
+      } catch {
+        // ignore
+      }
+      return org;
+    }
+
+    // 2. Если таблицы нет или данных нет, проверяем user_metadata
+    if (user?.user_metadata?.organization) {
+      const orgFromMeta = user.user_metadata.organization as Organization;
+      return orgFromMeta;
+    }
+
+    // 3. Проверяем локальное хранилище браузера
+    const cached = localStorage.getItem(LOCAL_ORG_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as Organization;
+      } catch {
+        // ignore
+      }
+    }
+
+    // 4. Если у пользователя указано company_name при регистрации
+    if (user?.user_metadata?.company_name) {
+      return {
+        id: ensureUUID(),
+        name: user.user_metadata.company_name,
+        logoUrl: null,
+        phone: '',
+        email: user.email || '',
+        inn: '',
+        address: '',
+      };
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('Исключение при получении организации:', err);
+    // Фолбэк на localStorage
+    const cached = localStorage.getItem(LOCAL_ORG_KEY);
+    if (cached) {
+      try {
+        return JSON.parse(cached) as Organization;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+/**
+ * Сохранение или обновление данных компании
+ */
+export async function saveOrganization(
+  orgData: Partial<Organization> & { name: string },
+  user?: User | null
+): Promise<{ success: boolean; organization?: Organization; error?: string }> {
+  try {
+    const orgId = ensureUUID(orgData.id);
+    const orgToSave: Organization = {
+      id: orgId,
+      name: orgData.name.trim() || 'Моя компания',
+      logoUrl: orgData.logoUrl || null,
+      phone: orgData.phone?.trim() || '',
+      email: orgData.email?.trim() || user?.email || '',
+      inn: orgData.inn?.trim() || '',
+      address: orgData.address?.trim() || '',
+      createdAt: orgData.createdAt || new Date().toISOString(),
+    };
+
+    // Всегда сохраняем в localStorage для мгновенного доступа
+    try {
+      localStorage.setItem(LOCAL_ORG_KEY, JSON.stringify(orgToSave));
+    } catch {
+      // ignore
+    }
+
+    // Пытаемся обновить user_metadata в Supabase Auth
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          organization: orgToSave,
+          organization_id: orgId,
+          company_name: orgToSave.name,
+        },
+      });
+    } catch {
+      // ignore
+    }
+
+    // Пытаемся записать в таблицу organizations в БД Supabase
+    try {
+      const { data, error } = await supabase
+        .from('organizations')
+        .upsert(
+          {
+            id: orgToSave.id,
+            name: orgToSave.name,
+            logo_url: orgToSave.logoUrl,
+            phone: orgToSave.phone,
+            email: orgToSave.email,
+            inn: orgToSave.inn,
+            address: orgToSave.address,
+          },
+          { onConflict: 'id' }
+        )
+        .select('id, name, logo_url, phone, email, inn, address, created_at')
+        .single();
+
+      if (!error && data) {
+        orgToSave.createdAt = data.created_at;
+      } else if (error) {
+        console.warn('Таблица organizations пока недоступна в Supabase:', error.message);
+      }
+    } catch (dbErr) {
+      console.warn('Не удалось записать в таблицу organizations (используется fallback):', dbErr);
+    }
+
+    return { success: true, organization: orgToSave };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Не удалось сохранить профиль компании',
+    };
+  }
+}
+
 

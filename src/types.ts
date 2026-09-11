@@ -46,8 +46,20 @@ export interface MaterialItem {
   profileUnitMode?: 'm' | 'pcs'; // режим для профиля: метры или 2-метровые штуки
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  inn?: string | null;
+  address?: string | null;
+  createdAt?: string;
+}
+
 export interface CatalogMaterialItem {
   id: string;
+  organizationId?: string | null;
   category: MaterialCategory;
   name: string;
   unit: UnitType;
@@ -55,9 +67,9 @@ export interface CatalogMaterialItem {
   clientPrice: number; // client_price
 }
 
-
 export interface Project {
   id: string;
+  organizationId?: string | null;
   title: string;
   clientName: string;
   phone: string;

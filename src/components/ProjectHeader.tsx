@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Project, CalculationResult } from '../types';
+import type { Project, CalculationResult, Organization } from '../types';
 import {
   Building2,
   Phone,
@@ -15,7 +15,9 @@ import {
   CloudUpload,
   Loader2,
   CheckCircle2,
-  BookOpen
+  BookOpen,
+  Settings,
+  LogOut
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -26,9 +28,13 @@ interface ProjectHeaderProps {
   onSaveProject: () => void;
   isSaving: boolean;
   lastSavedAt: string | null;
+  organization?: Organization | null;
+  userEmail?: string | null;
   onOpenProjectsModal?: () => void;
   onOpenCatalogModal?: () => void;
+  onOpenCompanyModal?: () => void;
   onNewProject?: () => void;
+  onLogout?: () => void;
 }
 
 export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
@@ -39,9 +45,13 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   onSaveProject,
   isSaving,
   lastSavedAt,
+  organization,
+  userEmail,
   onOpenProjectsModal,
   onOpenCatalogModal,
+  onOpenCompanyModal,
   onNewProject,
+  onLogout,
 }) => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -58,15 +68,39 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
         {/* Верхняя строка: Брендинг и основные поля сделки */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <Building2 className="w-5 h-5" />
-            </div>
+            {organization?.logoUrl ? (
+              <div
+                onClick={onOpenCompanyModal}
+                className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1 shadow-sm shrink-0 cursor-pointer hover:border-blue-400 hover:shadow transition"
+                title="Нажмите для настройки профиля компании"
+              >
+                <img
+                  src={organization.logoUrl}
+                  alt={organization.name || 'Логотип компании'}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : (
+              <div
+                onClick={onOpenCompanyModal}
+                className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0 cursor-pointer hover:opacity-90 transition"
+                title="Нажмите для настройки профиля компании"
+              >
+                <Building2 className="w-5 h-5" />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold tracking-wider uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/60">
-                  Тихие Стены
-                </span>
-                <span className="text-xs text-slate-600 font-medium">PRO Смета</span>
+                <button
+                  type="button"
+                  onClick={onOpenCompanyModal}
+                  className="text-xs font-bold tracking-wider uppercase text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200/80 transition inline-flex items-center gap-1"
+                  title="Редактировать компанию"
+                >
+                  <span>{organization?.name || 'Тихие Стены'}</span>
+                  <Settings className="w-2.5 h-2.5 opacity-60" />
+                </button>
+                <span className="text-xs text-slate-500 font-medium">PRO Смета</span>
               </div>
               <input
                 type="text"
@@ -127,7 +161,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
             </div>
 
             {/* Кнопки управления проектом */}
-            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center flex-wrap sm:flex-nowrap">
               {onNewProject && (
                 <button
                   type="button"
@@ -160,6 +194,18 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 </button>
               )}
 
+              {onOpenCompanyModal && (
+                <button
+                  type="button"
+                  onClick={onOpenCompanyModal}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 transition flex items-center gap-1 shadow-2xs"
+                  title="Настройки профиля компании"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden md:inline">Компания</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onSaveProject}
@@ -183,6 +229,17 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                   </>
                 )}
               </button>
+
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition ml-0.5"
+                  title={`Выйти из аккаунта (${userEmail || 'пользователь'})`}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
