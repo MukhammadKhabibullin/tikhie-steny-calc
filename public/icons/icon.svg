@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#2563eb" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background container with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="4" />
+
+  <!-- Acoustic wall waves badge -->
+  <g filter="url(#glow)">
+    <!-- Central Hexagonal / Shield Card -->
+    <rect x="106" y="106" width="300" height="300" rx="48" fill="url(#accentGrad)" />
+    
+    <!-- Stylized Acoustic Sound Waves & Wall Lines -->
+    <!-- Left wall bar -->
+    <rect x="156" y="196" width="28" height="120" rx="14" fill="#ffffff" opacity="0.95" />
+    <!-- Center wall bars (Acoustic absorption) -->
+    <rect x="204" y="160" width="28" height="192" rx="14" fill="#ffffff" />
+    <rect x="252" y="136" width="28" height="240" rx="14" fill="#ffffff" />
+    <rect x="300" y="176" width="28" height="160" rx="14" fill="#ffffff" opacity="0.95" />
+    <!-- Right wall bar -->
+    <rect x="348" y="216" width="28" height="80" rx="14" fill="#ffffff" opacity="0.9" />
+  </g>
+
+  <!-- Badge PRO -->
+  <g transform="translate(256, 380)">
+    <rect x="-60" y="-18" width="120" height="36" rx="18" fill="#0f172a" stroke="#60a5fa" stroke-width="3" />
+    <text x="0" y="7" fill="#38bdf8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="20" letter-spacing="3" text-anchor="middle">PRO</text>
+  </g>
+</svg>
