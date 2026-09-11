@@ -8,6 +8,8 @@ import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { CatalogManagerModal } from './components/CatalogManagerModal';
 import { AuthScreen } from './components/AuthScreen';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
+import { PWAInstallModal } from './components/PWAInstallModal';
+import { usePWAInstall } from './services/pwaService';
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
@@ -94,6 +96,9 @@ export function App() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isFirstSetupModal, setIsFirstSetupModal] = useState(false);
+
+  // Управление установкой PWA
+  const { canInstall, isIOS, showIOSPrompt, setShowIOSPrompt, promptInstall } = usePWAInstall();
 
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
@@ -419,7 +424,21 @@ export function App() {
 
   // Экран входа и регистрации, если пользователь не авторизован
   if (!session) {
-    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+    return (
+      <>
+        <AuthScreen
+          onAuthSuccess={handleAuthSuccess}
+          canInstallPWA={canInstall}
+          onInstallPWA={promptInstall}
+        />
+        <PWAInstallModal
+          isOpen={showIOSPrompt}
+          onClose={() => setShowIOSPrompt(false)}
+          isIOS={isIOS}
+          onNativeInstall={promptInstall}
+        />
+      </>
+    );
   }
 
   return (
@@ -435,6 +454,8 @@ export function App() {
         lastSavedAt={lastSavedAt}
         organization={organization}
         userEmail={currentUser?.email}
+        canInstallPWA={canInstall}
+        onInstallPWA={promptInstall}
         onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
         onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
         onOpenCompanyModal={() => {
@@ -656,6 +677,14 @@ export function App() {
           setTimeout(() => setNotification(null), 4000);
         }}
         isFirstSetup={isFirstSetupModal}
+      />
+
+      {/* Модальное окно установки PWA / инструкции для iOS */}
+      <PWAInstallModal
+        isOpen={showIOSPrompt}
+        onClose={() => setShowIOSPrompt(false)}
+        isIOS={isIOS}
+        onNativeInstall={promptInstall}
       />
     </div>
   );

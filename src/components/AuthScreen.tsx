@@ -12,16 +12,23 @@ import {
   Database,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Download
 } from 'lucide-react';
 import { signInWithEmail, signUpWithEmail } from '../services/supabaseClient';
 import type { User, Session } from '../services/supabaseClient';
 
 interface AuthScreenProps {
   onAuthSuccess: (user: User, session: Session, isNewRegistration?: boolean) => void;
+  canInstallPWA?: boolean;
+  onInstallPWA?: () => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({
+  onAuthSuccess,
+  canInstallPWA,
+  onInstallPWA,
+}) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -339,6 +346,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             )}
           </div>
         </div>
+
+        {/* Кнопка быстрой установки PWA */}
+        {canInstallPWA && onInstallPWA && (
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onInstallPWA}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-cyan-300 text-xs font-semibold border border-cyan-400/30 shadow-lg shadow-cyan-500/10 transition active:scale-98"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Установить приложение на устройство</span>
+            </button>
+          </div>
+        )}
 
         {/* Преимущества и trust-блок */}
         <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-300">

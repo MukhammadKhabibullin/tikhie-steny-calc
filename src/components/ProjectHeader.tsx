@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   BookOpen,
   Settings,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -30,6 +31,8 @@ interface ProjectHeaderProps {
   lastSavedAt: string | null;
   organization?: Organization | null;
   userEmail?: string | null;
+  canInstallPWA?: boolean;
+  onInstallPWA?: () => void;
   onOpenProjectsModal?: () => void;
   onOpenCatalogModal?: () => void;
   onOpenCompanyModal?: () => void;
@@ -47,6 +50,8 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   lastSavedAt,
   organization,
   userEmail,
+  canInstallPWA,
+  onInstallPWA,
   onOpenProjectsModal,
   onOpenCatalogModal,
   onOpenCompanyModal,
@@ -203,6 +208,18 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 >
                   <Building2 className="w-3.5 h-3.5 text-slate-500" />
                   <span className="hidden md:inline">Компания</span>
+                </button>
+              )}
+
+              {onInstallPWA && canInstallPWA && (
+                <button
+                  type="button"
+                  onClick={onInstallPWA}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center gap-1.5 shadow-2xs"
+                  title="Установить «Тихие Стены PRO» на устройство"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Установить</span>
                 </button>
               )}
 
