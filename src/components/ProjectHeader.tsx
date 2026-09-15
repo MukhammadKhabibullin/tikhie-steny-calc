@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   BookOpen,
   Settings,
-  LogOut
+  LogOut,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -34,6 +35,7 @@ interface ProjectHeaderProps {
   onOpenCatalogModal?: () => void;
   onOpenCompanyModal?: () => void;
   onNewProject?: () => void;
+  onNavigateToDashboard?: () => void;
   onLogout?: () => void;
 }
 
@@ -61,8 +63,10 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
   onOpenCatalogModal,
   onOpenCompanyModal,
   onNewProject,
+  onNavigateToDashboard,
   onLogout,
 }) => {
+  const handleLogoClick = onNavigateToDashboard || onOpenCompanyModal;
 
   return (
     <header className="bg-white border-b border-slate-200 shadow-sm">
@@ -72,25 +76,37 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="flex items-center gap-3">
             {organization?.logoUrl ? (
-              <div
-                onClick={onOpenCompanyModal}
-                className="w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1 shadow-sm shrink-0 cursor-pointer hover:border-blue-400 hover:shadow transition"
-                title="Нажмите для настройки профиля компании"
+              <button
+                type="button"
+                onClick={handleLogoClick}
+                className="group relative w-11 h-11 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1 shadow-sm shrink-0 cursor-pointer hover:border-blue-500 hover:shadow transition outline-none"
+                title={onNavigateToDashboard ? "Вернуться на главный экран (Dashboard)" : "Нажмите для настройки профиля компании"}
               >
                 <img
                   src={organization.logoUrl}
                   alt={organization.name || 'Логотип компании'}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain group-hover:scale-95 transition-transform"
                 />
-              </div>
+                {onNavigateToDashboard && (
+                  <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs opacity-0 group-hover:opacity-100 transition">
+                    ←
+                  </span>
+                )}
+              </button>
             ) : (
-              <div
-                onClick={onOpenCompanyModal}
-                className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0 cursor-pointer hover:opacity-90 transition"
-                title="Нажмите для настройки профиля компании"
+              <button
+                type="button"
+                onClick={handleLogoClick}
+                className="group relative w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0 cursor-pointer hover:opacity-95 hover:shadow-lg transition outline-none"
+                title={onNavigateToDashboard ? "Вернуться на главный экран (Dashboard)" : "Нажмите для настройки профиля компании"}
               >
-                <Building2 className="w-5 h-5" />
-              </div>
+                <Building2 className="w-5 h-5 group-hover:scale-90 transition-transform" />
+                {onNavigateToDashboard && (
+                  <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shadow-xs opacity-0 group-hover:opacity-100 transition">
+                    ←
+                  </span>
+                )}
+              </button>
             )}
             <div>
               <div className="flex items-center gap-2">
@@ -165,6 +181,17 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
 
             {/* Кнопки управления проектом */}
             <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center flex-wrap sm:flex-nowrap">
+              {onNavigateToDashboard && (
+                <button
+                  type="button"
+                  onClick={onNavigateToDashboard}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 shadow-2xs transition flex items-center gap-1"
+                  title="Вернуться на главный экран (Dashboard)"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">В меню</span>
+                </button>
+              )}
               {onNewProject && (
                 <button
                   type="button"

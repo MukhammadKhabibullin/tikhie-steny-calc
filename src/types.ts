@@ -1,3 +1,5 @@
+export type AppView = 'dashboard' | 'editor';
+
 export type OpeningType = 'window' | 'door';
 
 export type MaterialCategory =

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Project, Room, MaterialItem, CatalogMaterialItem, Organization } from './types';
+import type { Project, Room, MaterialItem, CatalogMaterialItem, Organization, AppView } from './types';
 import { calculateProjectTotals } from './utils/calculator';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
@@ -8,6 +8,7 @@ import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { CatalogManagerModal } from './components/CatalogManagerModal';
 import { AuthScreen } from './components/AuthScreen';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
+import { DashboardScreen } from './components/DashboardScreen';
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
@@ -95,6 +96,8 @@ export function App() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isFirstSetupModal, setIsFirstSetupModal] = useState(false);
 
+  // Режим экрана: по умолчанию стартовая страница ('dashboard'), при создании/открытии проекта — 'editor'
+  const [currentView, setCurrentView] = useState<AppView>('dashboard');
 
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
@@ -324,13 +327,14 @@ export function App() {
     }
   }, [project, organization, rooms]);
 
-  // Загрузка сохраненного проекта из Supabase
+  // Загрузка сохраненного проекта из Supabase и переход в редактор
   const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[]) => {
     setProject(loadedProject);
     if (loadedRooms && loadedRooms.length > 0) {
       setRooms(loadedRooms);
     }
     setLastSavedAt(new Date().toISOString());
+    setCurrentView('editor');
     setNotification({
       type: 'success',
       message: `Проект «${loadedProject.title}» успешно загружен из Supabase!`,
@@ -338,9 +342,9 @@ export function App() {
     setTimeout(() => setNotification(null), 5000);
   }, []);
 
-  // Создание нового проекта (полный сброс всех полей и геометрии до нуля)
+  // Создание нового проекта (полный сброс всех полей и геометрии до нуля) и переход в редактор
   const handleNewProject = useCallback(() => {
-    if (project.title || project.clientName || rooms.length > 0) {
+    if (currentView === 'editor' && (project.title || project.clientName || rooms.length > 0)) {
       if (!confirm('Создать новый проект? Несохраненные изменения текущего расчета будут сброшены.')) {
         return;
       }
@@ -374,12 +378,13 @@ export function App() {
       })
     );
     setLastSavedAt(null);
+    setCurrentView('editor');
     setNotification({
       type: 'success',
-      message: 'Создан новый пустой проект. Все поля и геометрия обнулены.',
+      message: 'Создан новый пустой проект. Открыт редактор сметы.',
     });
     setTimeout(() => setNotification(null), 4000);
-  }, [project, rooms, catalog, organization]);
+  }, [currentView, project, rooms, catalog, organization]);
 
   // Обработчик успешной авторизации
   const handleAuthSuccess = useCallback(async (user: User, newSession: Session, isNewRegistration?: boolean) => {
@@ -427,28 +432,199 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/70 flex flex-col">
-      {/* Шапка проекта с дашбордом, финансовыми карточками и кнопкой сохранения */}
-      <ProjectHeader
-        project={project}
-        onUpdateProject={handleUpdateProject}
-        results={totals}
-        roomCount={rooms.length}
-        onSaveProject={handleSaveProject}
-        isSaving={isSaving}
-        lastSavedAt={lastSavedAt}
-        organization={organization}
-        userEmail={currentUser?.email}
-        onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
-        onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
-        onOpenCompanyModal={() => {
-          setIsFirstSetupModal(false);
-          setIsCompanyModalOpen(true);
-        }}
-        onNewProject={handleNewProject}
-        onLogout={handleLogout}
-      />
+    <>
+      {currentView === 'dashboard' ? (
+        <DashboardScreen
+          organization={organization}
+          userEmail={currentUser?.email}
+          catalogCount={catalog.length}
+          hasActiveProject={Boolean(project.title || project.clientName || rooms.length > 0)}
+          activeProjectTitle={project.title || project.clientName || 'Новый расчет'}
+          onCreateNewProject={handleNewProject}
+          onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
+          onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+          onOpenCompanyModal={() => {
+            setIsFirstSetupModal(false);
+            setIsCompanyModalOpen(true);
+          }}
+          onResumeProject={() => setCurrentView('editor')}
+          onLogout={handleLogout}
+        />
+      ) : (
+        <div className="min-h-screen bg-slate-100/70 flex flex-col">
+          {/* Шапка проекта с дашбордом, финансовыми карточками и кнопкой сохранения */}
+          <ProjectHeader
+            project={project}
+            onUpdateProject={handleUpdateProject}
+            results={totals}
+            roomCount={rooms.length}
+            onSaveProject={handleSaveProject}
+            isSaving={isSaving}
+            lastSavedAt={lastSavedAt}
+            organization={organization}
+            userEmail={currentUser?.email}
+            onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
+            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+            onOpenCompanyModal={() => {
+              setIsFirstSetupModal(false);
+              setIsCompanyModalOpen(true);
+            }}
+            onNewProject={handleNewProject}
+            onNavigateToDashboard={() => setCurrentView('dashboard')}
+            onLogout={handleLogout}
+          />
 
+          {/* Основной контент */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+            {/* Информационный баннер / подсказка */}
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles className="w-5 h-5 text-blue-200" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                    PRO Смета Multi-Room: Калькулятор драпировки и звукоизоляции «Тихие Стены»
+                  </h2>
+                  <p className="text-xs text-blue-100/90 mt-0.5">
+                    Задайте периметры стен и размеры окон/дверей. Модуль рассчитает точную площадь полотна с вычетами и технологический расход профиля.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSaveProject}
+                  disabled={isSaving}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition shadow-sm border border-emerald-400/40"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Сохранение...
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-3.5 h-3.5" />
+                      Сохранить проект
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNewProject}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+                  title="Создать новый чистый расчет"
+                >
+                  + Новый
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsProjectsModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+                >
+                  База проектов
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Печать
+                </button>
+                <button
+                  type="button"
+                  onClick={() => alert('Смета скопирована в буфер обмена!')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 transition shadow-sm"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+                  Экспорт
+                </button>
+              </div>
+            </div>
+
+            {/* Блок 1: Конструктор помещений (RoomBuilder) */}
+            <section className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
+                    1
+                  </span>
+                  Геометрия помещений и стен (Multi-Room)
+                </h2>
+                <div className="text-xs text-slate-600">
+                  Высота потолков и проемы с автовычетом
+                </div>
+              </div>
+              <RoomBuilder rooms={rooms} onUpdateRooms={setRooms} />
+            </section>
+
+            {/* Блок 2: Спецификация материалов и профилей (MaterialsSection) */}
+            <section className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs">
+                    2
+                  </span>
+                  Материалы, профили и ценообразование
+                </h2>
+                <div className="text-xs text-slate-600">
+                  Ткани, профили (м/хлысты 2м), наполнители, маржинальность
+                </div>
+              </div>
+              <MaterialsSection
+                materials={materials}
+                onUpdateMaterials={setMaterials}
+                calculatedFabricArea={totalFabricArea}
+                calculatedProfileLength={totalProfileLength}
+                catalog={catalog}
+                onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+                onSyncPricesWithCatalog={handleSyncPricesWithCatalog}
+                onAddCatalogItem={handleAddCatalogItemToProject}
+              />
+            </section>
+
+            {/* Финальный блок резюме сделки */}
+            <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="space-y-1">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                  <HelpCircle className="w-4 h-4 text-blue-600" />
+                  Структура коммерческого предложения
+                </div>
+                <p className="text-sm text-slate-600 max-w-xl">
+                  Итоговая смета включает ткань, профильные системы с запасом 8%, наполнители и монтажные работы по ставке 1 400 ₽/м².
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 w-full md:w-auto justify-end">
+                <div className="text-right">
+                  <div className="text-xs text-slate-600 font-medium">К оплате клиентом</div>
+                  <div className="text-2xl font-black text-blue-600 font-mono">
+                    {totals.totalClientPrice.toLocaleString('ru-RU')} ₽
+                  </div>
+                </div>
+                <div className="h-10 w-px bg-slate-200"></div>
+                <div className="text-right">
+                  <div className="text-xs text-slate-600 font-medium">Маржинальная прибыль</div>
+                  <div className="text-xl font-bold text-emerald-600 font-mono">
+                    +{totals.margin.toLocaleString('ru-RU')} ₽ ({totals.marginPercent}%)
+                  </div>
+                </div>
+              </div>
+            </section>
+          </main>
+
+          {/* Подвал */}
+          <footer className="border-t border-slate-200 bg-white py-4 mt-8">
+            <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600">
+              © {new Date().getFullYear()} «Тихие Стены» — Профессиональный калькулятор тканевой звукоизоляции и отделки стен.
+            </div>
+          </footer>
+        </div>
+      )}
 
       {/* Всплывающее уведомление о статусе Supabase */}
       {notification && (
@@ -475,156 +651,6 @@ export function App() {
           </div>
         </div>
       )}
-
-      {/* Основной контент */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-        {/* Информационный баннер / подсказка */}
-        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
-              <Sparkles className="w-5 h-5 text-blue-200" />
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                PRO Смета Multi-Room: Калькулятор драпировки и звукоизоляции «Тихие Стены»
-              </h2>
-              <p className="text-xs text-blue-100/90 mt-0.5">
-                Задайте периметры стен и размеры окон/дверей. Модуль рассчитает точную площадь полотна с вычетами и технологический расход профиля.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
-            <button
-              type="button"
-              onClick={handleSaveProject}
-              disabled={isSaving}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition shadow-sm border border-emerald-400/40"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Сохранение...
-                </>
-              ) : (
-                <>
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  Сохранить проект
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleNewProject}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-              title="Создать новый чистый расчет"
-            >
-              + Новый
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsProjectsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-            >
-              База проектов
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Печать
-            </button>
-            <button
-              type="button"
-              onClick={() => alert('Смета скопирована в буфер обмена!')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 transition shadow-sm"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
-              Экспорт
-            </button>
-          </div>
-        </div>
-
-        {/* Блок 1: Конструктор помещений (RoomBuilder) */}
-        <section className="space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs">
-                1
-              </span>
-              Геометрия помещений и стен (Multi-Room)
-            </h2>
-            <div className="text-xs text-slate-600">
-              Высота потолков и проемы с автовычетом
-            </div>
-          </div>
-          <RoomBuilder rooms={rooms} onUpdateRooms={setRooms} />
-        </section>
-
-        {/* Блок 2: Спецификация материалов и профилей (MaterialsSection) */}
-        <section className="space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs">
-                2
-              </span>
-              Материалы, профили и ценообразование
-            </h2>
-            <div className="text-xs text-slate-600">
-              Ткани, профили (м/хлысты 2м), наполнители, маржинальность
-            </div>
-          </div>
-          <MaterialsSection
-            materials={materials}
-            onUpdateMaterials={setMaterials}
-            calculatedFabricArea={totalFabricArea}
-            calculatedProfileLength={totalProfileLength}
-            catalog={catalog}
-            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
-            onSyncPricesWithCatalog={handleSyncPricesWithCatalog}
-            onAddCatalogItem={handleAddCatalogItemToProject}
-          />
-        </section>
-
-        {/* Финальный блок резюме сделки */}
-        <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-1">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4 text-blue-600" />
-              Структура коммерческого предложения
-            </div>
-            <p className="text-sm text-slate-600 max-w-xl">
-              Итоговая смета включает ткань, профильные системы с запасом 8%, наполнители и монтажные работы по ставке 1 400 ₽/м².
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-            <div className="text-right">
-              <div className="text-xs text-slate-600 font-medium">К оплате клиентом</div>
-              <div className="text-2xl font-black text-blue-600 font-mono">
-                {totals.totalClientPrice.toLocaleString('ru-RU')} ₽
-              </div>
-            </div>
-            <div className="h-10 w-px bg-slate-200"></div>
-            <div className="text-right">
-              <div className="text-xs text-slate-600 font-medium">Маржинальная прибыль</div>
-              <div className="text-xl font-bold text-emerald-600 font-mono">
-                +{totals.margin.toLocaleString('ru-RU')} ₽ ({totals.marginPercent}%)
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Подвал */}
-      <footer className="border-t border-slate-200 bg-white py-4 mt-8">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600">
-          © {new Date().getFullYear()} «Тихие Стены» — Профессиональный калькулятор тканевой звукоизоляции и отделки стен.
-        </div>
-      </footer>
 
       {/* Модальное окно базы сохраненных проектов */}
       <SavedProjectsModal
@@ -661,11 +687,8 @@ export function App() {
         }}
         isFirstSetup={isFirstSetupModal}
       />
-
-    </div>
+    </>
   );
 }
-
-
 
 export default App;
