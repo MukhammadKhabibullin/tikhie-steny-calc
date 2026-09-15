@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Project, Room, MaterialItem, CatalogMaterialItem, Organization } from './types';
-import { calculateProjectTotals, calculateTotalFabricArea, calculateTotalProfileLength } from './utils/calculator';
+import { calculateProjectTotals } from './utils/calculator';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
@@ -8,8 +8,6 @@ import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { CatalogManagerModal } from './components/CatalogManagerModal';
 import { AuthScreen } from './components/AuthScreen';
 import { CompanyProfileModal } from './components/CompanyProfileModal';
-import { PWAInstallModal } from './components/PWAInstallModal';
-import { usePWAInstall } from './services/pwaService';
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
@@ -97,8 +95,6 @@ export function App() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isFirstSetupModal, setIsFirstSetupModal] = useState(false);
 
-  // Управление установкой PWA
-  const { canInstall, isIOS, showIOSPrompt, setShowIOSPrompt, promptInstall } = usePWAInstall();
 
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
@@ -212,27 +208,26 @@ export function App() {
     };
   }, []);
 
-  // Расчет суммарных объемов геометрии
-  const totalFabricArea = useMemo(() => calculateTotalFabricArea(rooms), [rooms]);
-  const totalProfileLength = useMemo(() => calculateTotalProfileLength(rooms), [rooms]);
-
-  // Расчет итоговых финансовых показателей
+  // Расчет итоговых финансовых показателей и объемов геометрии
   const totals = useMemo(() => {
     return calculateProjectTotals(rooms, materials, 1400, 750);
   }, [rooms, materials]);
 
-  const handleUpdateProject = (fields: Partial<Project>) => {
+  const totalFabricArea = totals.totalFabricArea;
+  const totalProfileLength = totals.totalProfileLength;
+
+  const handleUpdateProject = useCallback((fields: Partial<Project>) => {
     setProject((prev) => ({ ...prev, ...fields }));
-  };
+  }, []);
 
   // Перезагрузка каталога из Supabase
-  const handleRefreshCatalog = async () => {
+  const handleRefreshCatalog = useCallback(async () => {
     const items = await fetchMaterialsCatalog();
     setCatalog(items);
-  };
+  }, []);
 
   // Синхронизация цен в текущей смете с базой данных
-  const handleSyncPricesWithCatalog = () => {
+  const handleSyncPricesWithCatalog = useCallback(() => {
     if (catalog.length === 0) {
       setNotification({
         type: 'error',
@@ -268,10 +263,10 @@ export function App() {
       message: `Цены успешно синхронизированы с каталогом Supabase (${updatedCount} поз. обновлено)!`,
     });
     setTimeout(() => setNotification(null), 4000);
-  };
+  }, [catalog, materials]);
 
   // Добавление позиции из каталога напрямую в проект
-  const handleAddCatalogItemToProject = (catItem: CatalogMaterialItem) => {
+  const handleAddCatalogItemToProject = useCallback((catItem: CatalogMaterialItem) => {
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
       catalogId: catItem.id,
@@ -290,10 +285,10 @@ export function App() {
       message: `Позиция «${catItem.name}» добавлена в смету с актуальной ценой из базы!`,
     });
     setTimeout(() => setNotification(null), 4000);
-  };
+  }, [totalFabricArea]);
 
   // Сохранение в Supabase
-  const handleSaveProject = async () => {
+  const handleSaveProject = useCallback(async () => {
     setIsSaving(true);
     setNotification(null);
     try {
@@ -327,10 +322,10 @@ export function App() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [project, organization, rooms]);
 
   // Загрузка сохраненного проекта из Supabase
-  const handleSelectSavedProject = (loadedProject: Project, loadedRooms: Room[]) => {
+  const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[]) => {
     setProject(loadedProject);
     if (loadedRooms && loadedRooms.length > 0) {
       setRooms(loadedRooms);
@@ -341,10 +336,10 @@ export function App() {
       message: `Проект «${loadedProject.title}» успешно загружен из Supabase!`,
     });
     setTimeout(() => setNotification(null), 5000);
-  };
+  }, []);
 
   // Создание нового проекта (полный сброс всех полей и геометрии до нуля)
-  const handleNewProject = () => {
+  const handleNewProject = useCallback(() => {
     if (project.title || project.clientName || rooms.length > 0) {
       if (!confirm('Создать новый проект? Несохраненные изменения текущего расчета будут сброшены.')) {
         return;
@@ -384,10 +379,10 @@ export function App() {
       message: 'Создан новый пустой проект. Все поля и геометрия обнулены.',
     });
     setTimeout(() => setNotification(null), 4000);
-  };
+  }, [project, rooms, catalog, organization]);
 
   // Обработчик успешной авторизации
-  const handleAuthSuccess = async (user: User, newSession: Session, isNewRegistration?: boolean) => {
+  const handleAuthSuccess = useCallback(async (user: User, newSession: Session, isNewRegistration?: boolean) => {
     setSession(newSession);
     setCurrentUser(user);
 
@@ -400,15 +395,15 @@ export function App() {
       setIsFirstSetupModal(true);
       setIsCompanyModalOpen(true);
     }
-  };
+  }, []);
 
   // Выход из системы
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await signOutUser();
     setSession(null);
     setCurrentUser(null);
     setOrganization(null);
-  };
+  }, []);
 
   // Экран проверки авторизации при первоначальной загрузке
   if (authChecking) {
@@ -425,19 +420,9 @@ export function App() {
   // Экран входа и регистрации, если пользователь не авторизован
   if (!session) {
     return (
-      <>
-        <AuthScreen
-          onAuthSuccess={handleAuthSuccess}
-          canInstallPWA={canInstall}
-          onInstallPWA={promptInstall}
-        />
-        <PWAInstallModal
-          isOpen={showIOSPrompt}
-          onClose={() => setShowIOSPrompt(false)}
-          isIOS={isIOS}
-          onNativeInstall={promptInstall}
-        />
-      </>
+      <AuthScreen
+        onAuthSuccess={handleAuthSuccess}
+      />
     );
   }
 
@@ -454,8 +439,6 @@ export function App() {
         lastSavedAt={lastSavedAt}
         organization={organization}
         userEmail={currentUser?.email}
-        canInstallPWA={canInstall}
-        onInstallPWA={promptInstall}
         onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
         onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
         onOpenCompanyModal={() => {
@@ -679,13 +662,6 @@ export function App() {
         isFirstSetup={isFirstSetupModal}
       />
 
-      {/* Модальное окно установки PWA / инструкции для iOS */}
-      <PWAInstallModal
-        isOpen={showIOSPrompt}
-        onClose={() => setShowIOSPrompt(false)}
-        isIOS={isIOS}
-        onNativeInstall={promptInstall}
-      />
     </div>
   );
 }

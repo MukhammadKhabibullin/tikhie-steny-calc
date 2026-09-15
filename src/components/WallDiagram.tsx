@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { Room, Wall, Opening } from '../types';
 import { Layers } from 'lucide-react';
 
@@ -34,7 +34,7 @@ interface SingleWallBoxProps {
  * - Подсветка ошибок при выходе проема за габариты стены
  * - Двусторонняя интерактивность при наведении курсора
  */
-const SingleWallBox: React.FC<SingleWallBoxProps> = ({
+const SingleWallBoxComponent: React.FC<SingleWallBoxProps> = ({
   wall,
   wallIndex,
   ceilingHeight,
@@ -76,79 +76,89 @@ const SingleWallBox: React.FC<SingleWallBoxProps> = ({
   const leftDimX = rectX - 10;
 
   // Проемы, принадлежащие именно этой стене
-  const wallOpenings = (openings || []).filter((op) => {
-    if (op.wallId) return op.wallId === wall.id;
-    return wallIndex === 0; // если стена не привязана, по умолчанию на 1-ю
-  });
+  const wallOpenings = useMemo(() => {
+    return (openings || []).filter((op) => {
+      if (op.wallId) return op.wallId === wall.id;
+      return wallIndex === 0; // если стена не привязана, по умолчанию на 1-ю
+    });
+  }, [openings, wall.id, wallIndex]);
 
-  const totalOpeningsWidthMm = wallOpenings.reduce(
-    (sum, o) => sum + (Number(o.width) || 0),
-    0
-  );
-  const isWidthOverflow = totalOpeningsWidthMm > wallLen;
+  const { positionedOpenings, wallOpeningsAreaM2 } = useMemo(() => {
+    const totalOpeningsWidthMm = wallOpenings.reduce(
+      (sum, o) => sum + (Number(o.width) || 0),
+      0
+    );
+    const overflow = totalOpeningsWidthMm > wallLen;
 
-  // Расчет горизонтального распределения проемов по длине стены
-  const gapMm =
-    wallOpenings.length > 0 && !isWidthOverflow
-      ? (wallLen - totalOpeningsWidthMm) / (wallOpenings.length + 1)
-      : 20;
+    // Расчет горизонтального распределения проемов по длине стены
+    const gapMm =
+      wallOpenings.length > 0 && !overflow
+        ? (wallLen - totalOpeningsWidthMm) / (wallOpenings.length + 1)
+        : 20;
 
-  const positionedOpenings = wallOpenings.map((op, opIdx) => {
-    const wMm = Math.max(50, Number(op.width) || 0);
-    const hMm = Math.max(50, Number(op.height) || 0);
+    const positioned = wallOpenings.map((op, opIdx) => {
+      const wMm = Math.max(50, Number(op.width) || 0);
+      const hMm = Math.max(50, Number(op.height) || 0);
 
-    const isExceedingWidth = wMm > wallLen;
-    const isExceedingHeight = hMm > heightVal;
-    const hasError = isExceedingWidth || isExceedingHeight || isWidthOverflow;
+      const isExceedingWidth = wMm > wallLen;
+      const isExceedingHeight = hMm > heightVal;
+      const hasError = isExceedingWidth || isExceedingHeight || overflow;
 
-    const opW = wMm * scale;
-    const opH = hMm * scale;
+      const opW = wMm * scale;
+      const opH = hMm * scale;
 
-    const prevWidthsMm = wallOpenings
-      .slice(0, opIdx)
-      .reduce((sum, prev) => sum + Math.max(50, Number(prev.width) || 0) + gapMm, gapMm);
+      const prevWidthsMm = wallOpenings
+        .slice(0, opIdx)
+        .reduce((sum, prev) => sum + Math.max(50, Number(prev.width) || 0) + gapMm, gapMm);
 
-    let opX = rectX + prevWidthsMm * scale;
-    if (isWidthOverflow) {
-      const stepX = (rectW - opW) / Math.max(1, wallOpenings.length - 1);
-      opX = rectX + (wallOpenings.length > 1 ? opIdx * stepX : 0);
-    }
-
-    // Вертикальное позиционирование
-    let opY: number;
-    if (op.type === 'door') {
-      // Двери стоят на линии чистого пола
-      opY = rectY + rectH - opH;
-    } else {
-      // Окна имеют высоту подоконника (~850мм от пола) или центрируются
-      const standardSillMm = 850;
-      if (hMm + standardSillMm <= heightVal) {
-        opY = rectY + rectH - (standardSillMm + hMm) * scale;
-      } else {
-        opY = rectY + Math.max(2, (rectH - opH) / 2);
+      let opX = rectX + prevWidthsMm * scale;
+      if (overflow) {
+        const stepX = (rectW - opW) / Math.max(1, wallOpenings.length - 1);
+        opX = rectX + (wallOpenings.length > 1 ? opIdx * stepX : 0);
       }
-    }
+
+      // Вертикальное позиционирование
+      let opY: number;
+      if (op.type === 'door') {
+        // Двери стоят на линии чистого пола
+        opY = rectY + rectH - opH;
+      } else {
+        // Окна имеют высоту подоконника (~850мм от пола) или центрируются
+        const standardSillMm = 850;
+        if (hMm + standardSillMm <= heightVal) {
+          opY = rectY + rectH - (standardSillMm + hMm) * scale;
+        } else {
+          opY = rectY + Math.max(2, (rectH - opH) / 2);
+        }
+      }
+
+      return {
+        op,
+        opW,
+        opH,
+        opX,
+        opY,
+        wMm,
+        hMm,
+        hasError,
+        isExceedingWidth,
+        isExceedingHeight,
+      };
+    });
+
+    const areaM2 = wallOpenings
+      .reduce(
+        (acc, op) => acc + ((Number(op.width) || 0) * (Number(op.height) || 0)) / 1_000_000,
+        0
+      )
+      .toFixed(2);
 
     return {
-      op,
-      opW,
-      opH,
-      opX,
-      opY,
-      wMm,
-      hMm,
-      hasError,
-      isExceedingWidth,
-      isExceedingHeight,
+      isWidthOverflow: overflow,
+      positionedOpenings: positioned,
+      wallOpeningsAreaM2: areaM2,
     };
-  });
-
-  const wallOpeningsAreaM2 = wallOpenings
-    .reduce(
-      (acc, op) => acc + ((Number(op.width) || 0) * (Number(op.height) || 0)) / 1_000_000,
-      0
-    )
-    .toFixed(2);
+  }, [wallOpenings, wallLen, heightVal, scale, rectW, rectH, rectX, rectY]);
 
   const clipId = `wall-clip-${wall.id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
@@ -509,7 +519,9 @@ const SingleWallBox: React.FC<SingleWallBoxProps> = ({
   );
 };
 
-export const WallDiagram: React.FC<WallDiagramProps> = ({
+const SingleWallBox = React.memo(SingleWallBoxComponent);
+
+const WallDiagramComponent: React.FC<WallDiagramProps> = ({
   room,
   hoveredWallId,
   onHoverWall,
@@ -526,10 +538,10 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
   const [internalSelectedWallId, setInternalSelectedWallId] = useState<string | 'all'>('all');
   const selectedWallId = propSelectedWallId !== undefined ? propSelectedWallId : internalSelectedWallId;
 
-  const handleSelectWall = (wallId: string | 'all') => {
+  const handleSelectWall = useCallback((wallId: string | 'all') => {
     setInternalSelectedWallId(wallId);
     onSelectWall?.(wallId);
-  };
+  }, [onSelectWall]);
 
   if (walls.length === 0) {
     return (
@@ -640,3 +652,5 @@ export const WallDiagram: React.FC<WallDiagramProps> = ({
     </div>
   );
 };
+
+export const WallDiagram = React.memo(WallDiagramComponent);

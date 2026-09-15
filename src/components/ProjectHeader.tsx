@@ -17,8 +17,7 @@ import {
   CheckCircle2,
   BookOpen,
   Settings,
-  LogOut,
-  Download
+  LogOut
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -31,8 +30,6 @@ interface ProjectHeaderProps {
   lastSavedAt: string | null;
   organization?: Organization | null;
   userEmail?: string | null;
-  canInstallPWA?: boolean;
-  onInstallPWA?: () => void;
   onOpenProjectsModal?: () => void;
   onOpenCatalogModal?: () => void;
   onOpenCompanyModal?: () => void;
@@ -40,7 +37,17 @@ interface ProjectHeaderProps {
   onLogout?: () => void;
 }
 
-export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
+const currencyFormatter = new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  maximumFractionDigits: 0,
+});
+
+const formatCurrency = (val: number): string => {
+  return currencyFormatter.format(val || 0);
+};
+
+const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
   project,
   onUpdateProject,
   results,
@@ -50,21 +57,12 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
   lastSavedAt,
   organization,
   userEmail,
-  canInstallPWA,
-  onInstallPWA,
   onOpenProjectsModal,
   onOpenCatalogModal,
   onOpenCompanyModal,
   onNewProject,
   onLogout,
 }) => {
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      maximumFractionDigits: 0,
-    }).format(val || 0);
-  };
 
   return (
     <header className="bg-white border-b border-slate-200 shadow-sm">
@@ -211,17 +209,6 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
                 </button>
               )}
 
-              {onInstallPWA && canInstallPWA && (
-                <button
-                  type="button"
-                  onClick={onInstallPWA}
-                  className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center gap-1.5 shadow-2xs"
-                  title="Установить «Тихие Стены PRO» на устройство"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Установить</span>
-                </button>
-              )}
 
               <button
                 type="button"
@@ -355,3 +342,5 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({
     </header>
   );
 };
+
+export const ProjectHeader = React.memo(ProjectHeaderComponent);

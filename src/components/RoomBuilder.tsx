@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import type { Room, Wall, Opening, OpeningType } from '../types';
+import React, { useState, useMemo, useCallback } from 'react';
+import type { Room, Wall, Opening, OpeningType, RoomCalculationResult } from '../types';
 import {
   calculateRoomMetrics
 } from '../utils/calculator';
@@ -22,16 +22,30 @@ interface RoomBuilderProps {
   onUpdateRooms: (rooms: Room[]) => void;
 }
 
-export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }) => {
+const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }) => {
   const [activeRoomId, setActiveRoomId] = useState<string>(rooms[0]?.id || '');
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [hoveredOpeningId, setHoveredOpeningId] = useState<string | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | 'all'>('all');
 
   // Выбираем активную комнату
-  const activeRoom = rooms.find((r) => r.id === activeRoomId) || rooms[0];
+  const activeRoom = useMemo(
+    () => rooms.find((r) => r.id === activeRoomId) || rooms[0],
+    [rooms, activeRoomId]
+  );
 
-  const handleAddRoom = () => {
+  // Мемоизированный расчет метрик всех комнат (периметр, брутто/нетто, проемы, профиль)
+  const roomMetricsMap = useMemo(() => {
+    const map = new Map<string, RoomCalculationResult>();
+    for (const r of rooms) {
+      map.set(r.id, calculateRoomMetrics(r));
+    }
+    return map;
+  }, [rooms]);
+
+  const currentMetrics = activeRoom ? roomMetricsMap.get(activeRoom.id) || null : null;
+
+  const handleAddRoom = useCallback(() => {
     const newRoomIndex = rooms.length + 1;
     const newRoom: Room = {
       id: crypto.randomUUID(),
@@ -45,25 +59,25 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     onUpdateRooms(updated);
     setActiveRoomId(newRoom.id);
     setSelectedWallId('all');
-  };
+  }, [rooms, onUpdateRooms]);
 
-  const handleDeleteRoom = (roomId: string) => {
+  const handleDeleteRoom = useCallback((roomId: string) => {
     const updated = rooms.filter((r) => r.id !== roomId);
     onUpdateRooms(updated);
     if (activeRoomId === roomId) {
       setActiveRoomId(updated[0]?.id || '');
     }
     setSelectedWallId('all');
-  };
+  }, [rooms, onUpdateRooms, activeRoomId]);
 
-  const handleUpdateActiveRoom = (fields: Partial<Room>) => {
+  const handleUpdateActiveRoom = useCallback((fields: Partial<Room>) => {
     if (!activeRoom) return;
     const updated = rooms.map((r) => (r.id === activeRoom.id ? { ...r, ...fields } : r));
     onUpdateRooms(updated);
-  };
+  }, [rooms, activeRoom, onUpdateRooms]);
 
   // Управление стенами
-  const handleAddWall = () => {
+  const handleAddWall = useCallback(() => {
     if (!activeRoom) return;
     const nextWallNum = activeRoom.walls.length + 1;
     const newWall: Wall = {
@@ -74,15 +88,15 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     handleUpdateActiveRoom({
       walls: [...activeRoom.walls, newWall],
     });
-  };
+  }, [activeRoom, handleUpdateActiveRoom]);
 
-  const handleUpdateWall = (wallId: string, fields: Partial<Wall>) => {
+  const handleUpdateWall = useCallback((wallId: string, fields: Partial<Wall>) => {
     if (!activeRoom) return;
     const updatedWalls = activeRoom.walls.map((w) => (w.id === wallId ? { ...w, ...fields } : w));
     handleUpdateActiveRoom({ walls: updatedWalls });
-  };
+  }, [activeRoom, handleUpdateActiveRoom]);
 
-  const handleDeleteWall = (wallId: string) => {
+  const handleDeleteWall = useCallback((wallId: string) => {
     if (!activeRoom) return;
     const remainingWalls = activeRoom.walls.filter((w) => w.id !== wallId);
     const fallbackWallId = remainingWalls[0]?.id;
@@ -103,10 +117,10 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     if (selectedWallId === wallId) {
       setSelectedWallId('all');
     }
-  };
+  }, [activeRoom, handleUpdateActiveRoom, selectedWallId]);
 
   // Управление проемами (окна / двери)
-  const handleAddOpening = (type: OpeningType) => {
+  const handleAddOpening = useCallback((type: OpeningType) => {
     if (!activeRoom) return;
 
     let targetWallId: string | undefined = undefined;
@@ -140,23 +154,21 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
     // Мягкая подсветка созданного проема на чертеже
     setHoveredOpeningId(newOpening.id);
     setTimeout(() => setHoveredOpeningId(null), 2000);
-  };
+  }, [activeRoom, handleUpdateActiveRoom, selectedWallId]);
 
-  const handleUpdateOpening = (openingId: string, fields: Partial<Opening>) => {
+  const handleUpdateOpening = useCallback((openingId: string, fields: Partial<Opening>) => {
     if (!activeRoom) return;
     const updatedOpenings = activeRoom.openings.map((op) =>
       op.id === openingId ? { ...op, ...fields } : op
     );
     handleUpdateActiveRoom({ openings: updatedOpenings });
-  };
+  }, [activeRoom, handleUpdateActiveRoom]);
 
-  const handleDeleteOpening = (openingId: string) => {
+  const handleDeleteOpening = useCallback((openingId: string) => {
     if (!activeRoom) return;
     const updatedOpenings = activeRoom.openings.filter((op) => op.id !== openingId);
     handleUpdateActiveRoom({ openings: updatedOpenings });
-  };
-
-  const currentMetrics = activeRoom ? calculateRoomMetrics(activeRoom) : null;
+  }, [activeRoom, handleUpdateActiveRoom]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -169,7 +181,7 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
           </div>
           {rooms.map((r, idx) => {
             const isActive = r.id === (activeRoom?.id || activeRoomId);
-            const m = calculateRoomMetrics(r);
+            const m = roomMetricsMap.get(r.id);
             return (
               <button
                 key={r.id}
@@ -186,7 +198,7 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
                     isActive ? 'bg-blue-700/80 text-blue-100' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {m.netWallArea} м²
+                  {m ? m.netWallArea : 0} м²
                 </span>
               </button>
             );
@@ -685,3 +697,4 @@ export const RoomBuilder: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms }
   );
 };
 
+export const RoomBuilder = React.memo(RoomBuilderComponent);

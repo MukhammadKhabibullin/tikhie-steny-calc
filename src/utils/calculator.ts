@@ -70,14 +70,15 @@ export const calculateProfileLength = (room: Room, reserveFactor: number = 1.08)
 };
 
 /**
- * Комплексный расчет для одной комнаты
+ * Комплексный расчет для одной комнаты (выполняется за один проход без повторных вычислений)
  */
 export const calculateRoomMetrics = (room: Room, profileReserveFactor: number = 1.08): RoomCalculationResult => {
   const perimeter = calculateRoomPerimeter(room);
-  const grossWallArea = calculateGrossWallArea(room);
+  const heightInM = mmToM(room.ceilingHeight);
+  const grossWallArea = roundTo(perimeter * heightInM);
   const openingsArea = calculateOpeningsArea(room);
-  const netWallArea = calculateNetFabricArea(room);
-  const profileLengthWithReserve = calculateProfileLength(room, profileReserveFactor);
+  const netWallArea = roundTo(Math.max(0, grossWallArea - openingsArea));
+  const profileLengthWithReserve = roundTo(perimeter * profileReserveFactor);
 
   return {
     roomId: room.id,
@@ -90,9 +91,35 @@ export const calculateRoomMetrics = (room: Room, profileReserveFactor: number = 
 };
 
 /**
+ * Однопроходный расчет суммарных метрик по всем комнатам проекта
+ */
+export const calculateTotalRoomMetrics = (
+  rooms: Room[],
+  profileReserveFactor: number = 1.08
+): { totalFabricArea: number; totalProfileLength: number; roomMetrics: RoomCalculationResult[] } => {
+  let totalFabricArea = 0;
+  let totalProfileLength = 0;
+  const roomMetrics: RoomCalculationResult[] = new Array(rooms.length);
+
+  for (let i = 0; i < rooms.length; i++) {
+    const metrics = calculateRoomMetrics(rooms[i], profileReserveFactor);
+    totalFabricArea += metrics.netWallArea;
+    totalProfileLength += metrics.profileLengthWithReserve;
+    roomMetrics[i] = metrics;
+  }
+
+  return {
+    totalFabricArea: roundTo(totalFabricArea),
+    totalProfileLength: roundTo(totalProfileLength),
+    roomMetrics,
+  };
+};
+
+/**
  * Расчет суммарной чистой площади ткани по всем комнатам проекта (в м²)
  */
 export const calculateTotalFabricArea = (rooms: Room[]): number => {
+  if (!rooms || rooms.length === 0) return 0;
   const total = rooms.reduce((acc, room) => acc + calculateNetFabricArea(room), 0);
   return roundTo(total);
 };
@@ -101,6 +128,7 @@ export const calculateTotalFabricArea = (rooms: Room[]): number => {
  * Расчет суммарного метража профиля по всем комнатам (в пог. м)
  */
 export const calculateTotalProfileLength = (rooms: Room[], reserveFactor: number = 1.08): number => {
+  if (!rooms || rooms.length === 0) return 0;
   const total = rooms.reduce((acc, room) => acc + calculateProfileLength(room, reserveFactor), 0);
   return roundTo(total);
 };
@@ -109,6 +137,7 @@ export const calculateTotalProfileLength = (rooms: Room[], reserveFactor: number
  * Расчет себестоимости материалов (руб)
  */
 export const calculateMaterialsCostPrice = (materials: MaterialItem[]): number => {
+  if (!materials || materials.length === 0) return 0;
   const total = materials.reduce((acc, item) => {
     return acc + (Number(item.costPrice) || 0) * (Number(item.quantity) || 0);
   }, 0);
@@ -119,6 +148,7 @@ export const calculateMaterialsCostPrice = (materials: MaterialItem[]): number =
  * Расчет клиентской стоимости материалов (руб)
  */
 export const calculateMaterialsClientPrice = (materials: MaterialItem[]): number => {
+  if (!materials || materials.length === 0) return 0;
   const total = materials.reduce((acc, item) => {
     return acc + (Number(item.clientPrice) || 0) * (Number(item.quantity) || 0);
   }, 0);
@@ -129,12 +159,12 @@ export const calculateMaterialsClientPrice = (materials: MaterialItem[]): number
  * Расчет количества двухметровых хлыстов профиля по метражу
  */
 export const calculateProfilePieces = (meters: number, pieceLengthM: number = 2): number => {
-  if (meters <= 0) return 0;
+  if (meters <= 0 || pieceLengthM <= 0) return 0;
   return Math.ceil(meters / pieceLengthM);
 };
 
 /**
- * Расчет итоговых финансовых показателей проекта
+ * Расчет итоговых финансовых показателей проекта (оптимизирован для предотвращения повторных обходов)
  * @param rooms список комнат
  * @param materials список материалов
  * @param installationRatePerM2 базовая ставка монтажа за м² (для клиента)
@@ -146,8 +176,7 @@ export const calculateProjectTotals = (
   installationRatePerM2: number = 1200,
   installationCostPriceRate: number = 700
 ): CalculationResult => {
-  const totalFabricArea = calculateTotalFabricArea(rooms);
-  const totalProfileLength = calculateTotalProfileLength(rooms);
+  const { totalFabricArea, totalProfileLength } = calculateTotalRoomMetrics(rooms);
 
   const materialsCost = calculateMaterialsCostPrice(materials);
   const materialsClient = calculateMaterialsClientPrice(materials);

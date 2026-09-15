@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
 import { calculateProfilePieces } from '../utils/calculator';
 import {
@@ -36,7 +36,7 @@ const CATEGORY_NAMES: Record<MaterialCategory, string> = {
   other: 'Звукоизоляция и прочее',
 };
 
-export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
+const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   materials,
   onUpdateMaterials,
   calculatedFabricArea,
@@ -52,19 +52,19 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
 
-  const handleUpdateItem = (id: string, fields: Partial<MaterialItem>) => {
+  const handleUpdateItem = useCallback((id: string, fields: Partial<MaterialItem>) => {
     const updated = materials.map((item) => {
       if (item.id !== id) return item;
       return { ...item, ...fields };
     });
     onUpdateMaterials(updated);
-  };
+  }, [materials, onUpdateMaterials]);
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = useCallback((id: string) => {
     onUpdateMaterials(materials.filter((m) => m.id !== id));
-  };
+  }, [materials, onUpdateMaterials]);
 
-  const handleAddItem = (category: MaterialCategory = 'fabric') => {
+  const handleAddItem = useCallback((category: MaterialCategory = 'fabric') => {
     const matchingCatalog = catalog?.find((c) => c.category === category);
     const defaultUnit: UnitType =
       matchingCatalog?.unit || (category === 'fabric' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs');
@@ -82,9 +82,9 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
     };
 
     onUpdateMaterials([...materials, newItem]);
-  };
+  }, [catalog, calculatedFabricArea, materials, onUpdateMaterials]);
 
-  const handleAddFromCatalog = (catItem: CatalogMaterialItem) => {
+  const handleAddFromCatalog = useCallback((catItem: CatalogMaterialItem) => {
     if (onAddCatalogItem) {
       onAddCatalogItem(catItem);
       return;
@@ -101,9 +101,9 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
       profileUnitMode: 'm',
     };
     onUpdateMaterials([...materials, newItem]);
-  };
+  }, [onAddCatalogItem, calculatedFabricArea, materials, onUpdateMaterials]);
 
-  const handleSelectCatalogItemForLine = (lineId: string, catItem: CatalogMaterialItem) => {
+  const handleSelectCatalogItemForLine = useCallback((lineId: string, catItem: CatalogMaterialItem) => {
     const updated = materials.map((item) => {
       if (item.id !== lineId) return item;
       return {
@@ -117,10 +117,10 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
       };
     });
     onUpdateMaterials(updated);
-  };
+  }, [materials, onUpdateMaterials]);
 
   // Автоматическая привязка объемов из геометрии комнат
-  const handleSyncWithGeometry = () => {
+  const handleSyncWithGeometry = useCallback(() => {
     const updated = materials.map((item) => {
       if (item.category === 'fabric') {
         return { ...item, quantity: calculatedFabricArea, unit: 'm2' as UnitType };
@@ -136,10 +136,10 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
       return item;
     });
     onUpdateMaterials(updated);
-  };
+  }, [materials, calculatedFabricArea, calculatedProfileLength, profileViewMode, onUpdateMaterials]);
 
   // Переключение режима профилей (метры <-> штуки по 2м)
-  const toggleProfileMode = () => {
+  const toggleProfileMode = useCallback(() => {
     const nextMode = profileViewMode === 'm' ? 'pcs' : 'm';
     setProfileViewMode(nextMode);
 
@@ -172,21 +172,31 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
     });
 
     onUpdateMaterials(updated);
-  };
+  }, [profileViewMode, materials, onUpdateMaterials]);
 
-  // Фильтрация
-  const filteredMaterials = materials.filter((item) => {
-    const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      CATEGORY_NAMES[item.category]?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  // Фильтрация с мемоизацией
+  const filteredMaterials = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return materials.filter((item) => {
+      const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
+      const matchSearch =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        CATEGORY_NAMES[item.category]?.toLowerCase().includes(query);
+      return matchCat && matchSearch;
+    });
+  }, [materials, selectedCategory, searchQuery]);
 
-  // Расчет суммарных итогов по спецификации
-  const totalCost = materials.reduce((acc, i) => acc + i.costPrice * i.quantity, 0);
-  const totalClient = materials.reduce((acc, i) => acc + i.clientPrice * i.quantity, 0);
-  const totalMargin = totalClient - totalCost;
+  // Расчет суммарных итогов по спецификации с мемоизацией
+  const { totalCost, totalClient, totalMargin } = useMemo(() => {
+    const cost = materials.reduce((acc, i) => acc + (Number(i.costPrice) || 0) * (Number(i.quantity) || 0), 0);
+    const client = materials.reduce((acc, i) => acc + (Number(i.clientPrice) || 0) * (Number(i.quantity) || 0), 0);
+    return {
+      totalCost: cost,
+      totalClient: client,
+      totalMargin: client - cost,
+    };
+  }, [materials]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -568,3 +578,5 @@ export const MaterialsSection: React.FC<MaterialsSectionProps> = ({
     </div>
   );
 };
+
+export const MaterialsSection = React.memo(MaterialsSectionComponent);
