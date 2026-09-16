@@ -6,10 +6,13 @@ import type {
   Wall,
   Opening,
   CatalogMaterialItem,
+  CatalogWorkItem,
   MaterialCategory,
+  WorkCategory,
   UnitType,
   Organization
 } from '../types';
+import { DEFAULT_MATERIALS, DEFAULT_WORKS } from '../data/prices';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL || 'https://qkqbvyqbpflialjboahy.supabase.co';
@@ -258,64 +261,15 @@ export async function fetchProjectRoomsWithWalls(projectId: string): Promise<Roo
 /**
  * Базовый набор материалов для наполнения пустого каталога в Supabase
  */
-export const DEFAULT_CATALOG_SEEDS: Omit<CatalogMaterialItem, 'id'>[] = [
-  {
-    category: 'fabric',
-    name: 'Акустическая ткань D-Premium Acoustic (бесшовная, 5.0м)',
-    unit: 'm2',
-    costPrice: 1650,
-    clientPrice: 2850,
-  },
-  {
-    category: 'fabric',
-    name: 'Ткань Clipso 705 Standard (акустическая пропитка)',
-    unit: 'm2',
-    costPrice: 1450,
-    clientPrice: 2450,
-  },
-  {
-    category: 'profile',
-    name: 'Профиль пристенный клипсовый TS-Wall Clip (2.0 м)',
-    unit: 'm',
-    costPrice: 320,
-    clientPrice: 580,
-  },
-  {
-    category: 'profile',
-    name: 'Профиль разделительный стыковочный TS-Divider (2.0 м)',
-    unit: 'm',
-    costPrice: 380,
-    clientPrice: 680,
-  },
-  {
-    category: 'plinth',
-    name: 'Теневой плинтус / демпферная лента TS-Shadow 15мм',
-    unit: 'm',
-    costPrice: 210,
-    clientPrice: 420,
-  },
-  {
-    category: 'other',
-    name: 'Звукопоглощающая акустическая плита СтопЗвук Эко 50мм',
-    unit: 'm2',
-    costPrice: 520,
-    clientPrice: 940,
-  },
-  {
-    category: 'other',
-    name: 'Звукоизоляционная тяжелая мембрана Тексаунд 70',
-    unit: 'm2',
-    costPrice: 950,
-    clientPrice: 1650,
-  },
-  {
-    category: 'bumper',
-    name: 'Демпферная акустическая лента Вибростек-М 100',
-    unit: 'm',
-    costPrice: 45,
-    clientPrice: 95,
-  },
-];
+/**
+ * Базовый набор материалов для наполнения пустого каталога в Supabase (51 позиция из шаблона 2026)
+ */
+export const DEFAULT_CATALOG_SEEDS: CatalogMaterialItem[] = DEFAULT_MATERIALS;
+
+/**
+ * Базовый набор монтажных и дополнительных работ (39 позиций из шаблона 2026)
+ */
+export const DEFAULT_WORKS_SEEDS: CatalogWorkItem[] = DEFAULT_WORKS;
 
 /**
  * Загрузка актуального каталога материалов из Supabase
@@ -328,12 +282,12 @@ export async function fetchMaterialsCatalog(): Promise<CatalogMaterialItem[]> {
       .order('category', { ascending: true });
 
     if (error) {
-      console.error('Ошибка загрузки materials_catalog:', error);
-      return [];
+      console.warn('Ошибка загрузки materials_catalog из Supabase, используем шаблонные цены:', error.message);
+      return DEFAULT_MATERIALS;
     }
 
     if (!data || data.length === 0) {
-      return [];
+      return DEFAULT_MATERIALS;
     }
 
     return data.map((row) => ({
@@ -346,7 +300,7 @@ export async function fetchMaterialsCatalog(): Promise<CatalogMaterialItem[]> {
     }));
   } catch (err) {
     console.error('Исключение при получении materials_catalog:', err);
-    return [];
+    return DEFAULT_MATERIALS;
   }
 }
 
@@ -356,27 +310,28 @@ export async function fetchMaterialsCatalog(): Promise<CatalogMaterialItem[]> {
 export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]> {
   try {
     const existing = await fetchMaterialsCatalog();
-    if (existing.length > 0) {
+    if (existing.length >= DEFAULT_MATERIALS.length) {
       return existing;
     }
 
-    const rowsToInsert = DEFAULT_CATALOG_SEEDS.map((item) => ({
-      id: crypto.randomUUID(),
+    const rowsToInsert = DEFAULT_CATALOG_SEEDS.map((item, idx) => ({
+      id: item.id,
       category: item.category,
       name: item.name,
       unit: item.unit,
       cost_price: item.costPrice,
       client_price: item.clientPrice,
+      sort_order: idx + 1,
     }));
 
     const { data, error } = await supabase
       .from('materials_catalog')
-      .insert(rowsToInsert)
+      .upsert(rowsToInsert, { onConflict: 'id' })
       .select('id, category, name, unit, cost_price, client_price');
 
     if (error || !data) {
       console.error('Ошибка заполнения materials_catalog:', error);
-      return [];
+      return DEFAULT_MATERIALS;
     }
 
     return data.map((row) => ({
@@ -389,7 +344,101 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
     }));
   } catch (err) {
     console.error('Исключение при заполнении каталога:', err);
-    return [];
+    return DEFAULT_MATERIALS;
+  }
+}
+
+/**
+ * Загрузка актуального каталога работ из Supabase (с fallback на DEFAULT_WORKS)
+ */
+export async function fetchWorksCatalog(): Promise<CatalogWorkItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from('works_catalog')
+      .select('id, category, name, unit, cost_price, client_price')
+      .order('category', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return DEFAULT_WORKS;
+    }
+
+    return data.map((row) => ({
+      id: row.id,
+      category: (row.category || 'additional') as WorkCategory,
+      name: row.name || 'Без названия',
+      unit: (row.unit || 'm2') as UnitType,
+      costPrice: Number(row.cost_price) || 0,
+      clientPrice: Number(row.client_price) || 0,
+    }));
+  } catch (err) {
+    console.warn('Исключение при получении works_catalog, используем дефолтные работы:', err);
+    return DEFAULT_WORKS;
+  }
+}
+
+/**
+ * Сохранение (добавление или обновление) позиции в works_catalog в Supabase
+ */
+export async function saveWorkItemToSupabase(
+  item: Partial<CatalogWorkItem> & { name: string; category: WorkCategory }
+): Promise<{ success: boolean; item?: CatalogWorkItem; error?: string }> {
+  try {
+    const itemId = ensureUUID(item.id);
+
+    const payload = {
+      id: itemId,
+      category: item.category,
+      name: item.name.trim(),
+      unit: item.unit || 'm2',
+      cost_price: Number(item.costPrice) || 0,
+      client_price: Number(item.clientPrice) || 0,
+    };
+
+    const { data, error } = await supabase
+      .from('works_catalog')
+      .upsert(payload, { onConflict: 'id' })
+      .select('id, category, name, unit, cost_price, client_price')
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: error?.message || 'Не удалось сохранить позицию' };
+    }
+
+    const saved: CatalogWorkItem = {
+      id: data.id,
+      category: data.category as WorkCategory,
+      name: data.name,
+      unit: data.unit as UnitType,
+      costPrice: Number(data.cost_price) || 0,
+      clientPrice: Number(data.client_price) || 0,
+    };
+
+    return { success: true, item: saved };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Неизвестная ошибка сохранения',
+    };
+  }
+}
+
+/**
+ * Удаление позиции из works_catalog в Supabase
+ */
+export async function deleteWorkItemFromSupabase(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('works_catalog').delete().eq('id', id);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Неизвестная ошибка удаления',
+    };
   }
 }
 
@@ -455,6 +504,84 @@ export async function deleteCatalogItemFromSupabase(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Неизвестная ошибка удаления',
+    };
+  }
+}
+
+/**
+ * Полная синхронизация и обновление каталога в Supabase по шаблону 2026 года
+ */
+export async function syncAllCatalogFromTemplate(): Promise<{
+  success: boolean;
+  materialsCount: number;
+  worksCount: number;
+  error?: string;
+}> {
+  try {
+    // 1. Обновляем materials_catalog
+    const { data: existingMaterials } = await supabase.from('materials_catalog').select('id');
+    if (existingMaterials && existingMaterials.length > 0) {
+      await supabase
+        .from('materials_catalog')
+        .delete()
+        .in('id', existingMaterials.map((m) => m.id));
+    }
+
+    const materialRows = DEFAULT_MATERIALS.map((m, idx) => ({
+      id: m.id,
+      category: m.category,
+      name: m.name,
+      unit: m.unit,
+      cost_price: m.costPrice,
+      client_price: m.clientPrice,
+      sort_order: idx + 1,
+    }));
+
+    const { error: matErr } = await supabase.from('materials_catalog').insert(materialRows);
+    if (matErr) {
+      console.warn('Ошибка вставки materials_catalog при синхронизации:', matErr.message);
+    }
+
+    // 2. Пытаемся обновить works_catalog (если таблица создана в Supabase)
+    const worksCount = DEFAULT_WORKS.length;
+    try {
+      const { data: existingWorks } = await supabase.from('works_catalog').select('id');
+      if (existingWorks && existingWorks.length > 0) {
+        await supabase
+          .from('works_catalog')
+          .delete()
+          .in('id', existingWorks.map((w) => w.id));
+      }
+
+      const workRows = DEFAULT_WORKS.map((w, idx) => ({
+        id: w.id,
+        category: w.category,
+        name: w.name,
+        unit: w.unit,
+        cost_price: w.costPrice,
+        client_price: w.clientPrice,
+        sort_order: idx + 1,
+      }));
+
+      const { error: workErr } = await supabase.from('works_catalog').insert(workRows);
+      if (workErr) {
+        console.warn('Таблица works_catalog еще не создана в Supabase:', workErr.message);
+      }
+    } catch {
+      // works_catalog might not exist yet
+    }
+
+    return {
+      success: true,
+      materialsCount: DEFAULT_MATERIALS.length,
+      worksCount,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      materialsCount: 0,
+      worksCount: 0,
+      error: err instanceof Error ? err.message : String(err),
     };
   }
 }

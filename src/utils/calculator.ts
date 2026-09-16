@@ -173,8 +173,8 @@ export const calculateProfilePieces = (meters: number, pieceLengthM: number = 2)
 export const calculateProjectTotals = (
   rooms: Room[],
   materials: MaterialItem[],
-  installationRatePerM2: number = 1200,
-  installationCostPriceRate: number = 700
+  installationRatePerM2: number = 1400,
+  installationCostPriceRate: number = 800
 ): CalculationResult => {
   const { totalFabricArea, totalProfileLength } = calculateTotalRoomMetrics(rooms);
 

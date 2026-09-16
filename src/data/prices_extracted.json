@@ -1,0 +1,816 @@
+{
+  "materials": [
+    {
+      "id": "e813c430-0363-5897-9f29-65749a8b58c2",
+      "category": "fabric",
+      "name": "ТС КОМФОРТ (3,25м) Россия, 260г/м2",
+      "unit": "m2",
+      "costPrice": 1100.0,
+      "clientPrice": 1750.0,
+      "sortOrder": 15
+    },
+    {
+      "id": "e2d51194-9901-5a62-b2fc-02936471e002",
+      "category": "fabric",
+      "name": "Архитектурный текстиль ЛУНА (2,9м) Турция, 245г/м2",
+      "unit": "m2",
+      "costPrice": 1250.0,
+      "clientPrice": 1900.0,
+      "sortOrder": 16
+    },
+    {
+      "id": "8b75873c-21f6-55d0-9317-9ae5cb4a8936",
+      "category": "fabric",
+      "name": "Архитектурный текстиль МАРС (3,0м) Турция, 265г/м2",
+      "unit": "m2",
+      "costPrice": 1250.0,
+      "clientPrice": 1900.0,
+      "sortOrder": 17
+    },
+    {
+      "id": "b4fcf61c-d465-511e-bfe9-471f5d4e4fc9",
+      "category": "fabric",
+      "name": "Архитектурный текстиль Штукатурка (2,9м; 3,2м) С.Корея 285г/м2",
+      "unit": "m2",
+      "costPrice": 1450.0,
+      "clientPrice": 2100.0,
+      "sortOrder": 18
+    },
+    {
+      "id": "94b21460-9be5-592e-b045-f30934a50194",
+      "category": "fabric",
+      "name": "Архитектурный текстиль Узор (3,2м) С.Корея 285г/м2",
+      "unit": "m2",
+      "costPrice": 1450.0,
+      "clientPrice": 2100.0,
+      "sortOrder": 19
+    },
+    {
+      "id": "4ba50fe1-060d-5f80-9a94-4f7d88fc83f7",
+      "category": "fabric",
+      "name": "Архитектурный текстиль Орбита (3,2м)",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 20
+    },
+    {
+      "id": "65245dbe-ebca-5563-bcfc-66e38ea218bf",
+      "category": "fabric",
+      "name": "ТС КОМФОРТ Г1 (3,25м) 275г/м2 (Г1 В1 Д2 Т2) Россия (под заказ)",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 21
+    },
+    {
+      "id": "8dc04a00-7f67-5c6c-9aae-d26b9d35ce10",
+      "category": "fabric",
+      "name": "Арапал ПРОЕКТ Г1 (1,5м)  (Г1 В1 Д2 Т2)",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 22
+    },
+    {
+      "id": "a026b789-ce38-5fb2-b563-dd049d9fe91d",
+      "category": "fabric",
+      "name": "Орбита ПРОЕКТ Г1 (3,2м) Россия",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 23
+    },
+    {
+      "id": "f6c65903-643f-5bbb-84e1-8cb9c10ca12c",
+      "category": "fabric",
+      "name": "ТС НЭКСТ (3,2м) 285г/м2 (Г1 В2 Д3 Т2) (под заказ)",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 24
+    },
+    {
+      "id": "16564493-a23b-5160-8433-d62a48b4fcd0",
+      "category": "fabric",
+      "name": "Архитектурный текстиль Celena (Германия) (3,1м)",
+      "unit": "m2",
+      "costPrice": 1450.0,
+      "clientPrice": 2100.0,
+      "sortOrder": 25
+    },
+    {
+      "id": "0fc24d3c-6448-58f8-a8fc-046f1d84e93b",
+      "category": "fabric",
+      "name": "Акустический текстиль Акустик (3,2м) Германия 245г/м2",
+      "unit": "m2",
+      "costPrice": 1450.0,
+      "clientPrice": 2100.0,
+      "sortOrder": 26
+    },
+    {
+      "id": "ebd3451a-04ce-525b-a4c9-6f8e7830ed79",
+      "category": "fabric",
+      "name": "Акустический текстиль Silencio (Вафля) (3,2м/5,05м)",
+      "unit": "m2",
+      "costPrice": 1900.0,
+      "clientPrice": 2500.0,
+      "sortOrder": 27
+    },
+    {
+      "id": "5d1bfef9-84f2-58b8-8e5f-b86053a8cb45",
+      "category": "fabric",
+      "name": "S07 светопрозрачная ткань (1,6м; 2,1м; 3,2м; 5,0м)",
+      "unit": "m2",
+      "costPrice": 1300.0,
+      "clientPrice": 1900.0,
+      "sortOrder": 28
+    },
+    {
+      "id": "5eba4106-4f8d-5a9f-a5b3-a1359dedb952",
+      "category": "insulation",
+      "name": "Акустическая мембрана 10мм (1,05м) 250г/м2",
+      "unit": "m2",
+      "costPrice": 400.0,
+      "clientPrice": 600.0,
+      "sortOrder": 29
+    },
+    {
+      "id": "a3427e66-c09e-5ea8-818e-2736fe73914b",
+      "category": "insulation",
+      "name": "Акустический войлок 1300гр/м2 10мм (1,8м)",
+      "unit": "m2",
+      "costPrice": 900.0,
+      "clientPrice": 1100.0,
+      "sortOrder": 30
+    },
+    {
+      "id": "194b968f-fa4f-52ba-82b1-9be868b9fd94",
+      "category": "profile",
+      "name": "Профиль ТС Базовый, некрашеный (2,0м)",
+      "unit": "m",
+      "costPrice": 300.0,
+      "clientPrice": 400.0,
+      "sortOrder": 31
+    },
+    {
+      "id": "506b21d0-7244-518e-a583-856431a42724",
+      "category": "profile",
+      "name": "Профиль ТС Базовый, черный/белый (2,0м)",
+      "unit": "m",
+      "costPrice": 338.0,
+      "clientPrice": 450.0,
+      "sortOrder": 32
+    },
+    {
+      "id": "15423a83-a55c-52fc-9d35-82f874004d12",
+      "category": "plinth",
+      "name": "Плинтус ТС Теневой Мини 15мм, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 800.0,
+      "sortOrder": 33
+    },
+    {
+      "id": "9fc51bf0-7120-5bde-a889-5f91b07db8f1",
+      "category": "bumper",
+      "name": "Отбойник ТС, некрашеный (2,0м/3,0м)",
+      "unit": "m",
+      "costPrice": 488.0,
+      "clientPrice": 650.0,
+      "sortOrder": 34
+    },
+    {
+      "id": "f67b105d-5726-5787-9632-b4c15f9efa8e",
+      "category": "profile",
+      "name": "Профиль ТС Внутр.угол, некрашеный (2,0м)",
+      "unit": "m",
+      "costPrice": 488.0,
+      "clientPrice": 650.0,
+      "sortOrder": 35
+    },
+    {
+      "id": "49aac7de-6ab1-516e-9a49-f588a98a065b",
+      "category": "profile",
+      "name": "Профиль ТС Окно-Откос, некрашеный (2,0м)",
+      "unit": "m",
+      "costPrice": 525.0,
+      "clientPrice": 700.0,
+      "sortOrder": 36
+    },
+    {
+      "id": "4db71636-4b48-5e8b-82f0-48a00b5baff3",
+      "category": "profile",
+      "name": "Профиль ТС Окно-Откос, черный/белый (2,0м)",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 800.0,
+      "sortOrder": 37
+    },
+    {
+      "id": "45a92e95-51cb-50d6-81be-6bb8fa445c1d",
+      "category": "profile",
+      "name": "Профиль ТС Конструкционный, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 413.0,
+      "clientPrice": 550.0,
+      "sortOrder": 38
+    },
+    {
+      "id": "afedcd98-1062-5ea1-a573-d7f851bb86b1",
+      "category": "divider",
+      "name": "Разделитель теневой ТС 2мм, черный/белый (2,0м)",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 800.0,
+      "sortOrder": 39
+    },
+    {
+      "id": "84284564-6f59-5a99-baa3-b4743386036e",
+      "category": "profile",
+      "name": "Профиль ТС КАСКАД, некрашенный (2,0м)",
+      "unit": "m",
+      "costPrice": 525.0,
+      "clientPrice": 700.0,
+      "sortOrder": 40
+    },
+    {
+      "id": "554b32ea-a65b-55eb-bfeb-759119cca4ef",
+      "category": "profile",
+      "name": "Профиль ТС Конструктор 5см, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 413.0,
+      "clientPrice": 550.0,
+      "sortOrder": 41
+    },
+    {
+      "id": "7e83cdb2-145e-593d-82b0-71d735bee08f",
+      "category": "plinth",
+      "name": "Плинтус ТС Контур Плюс теневой 15мм с подсветкой, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 675.0,
+      "clientPrice": 900.0,
+      "sortOrder": 42
+    },
+    {
+      "id": "703c424f-96a3-5d9e-a0f7-2f777d50155c",
+      "category": "plinth",
+      "name": "Плинтус ТС Контур 15мм с подсветкой, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 638.0,
+      "clientPrice": 850.0,
+      "sortOrder": 43
+    },
+    {
+      "id": "51c1c094-9fdb-539e-87f5-2e38f5705aa2",
+      "category": "lighting",
+      "name": "Световая Линия ТС 16мм, черный/белый (2,0м)",
+      "unit": "m",
+      "costPrice": 675.0,
+      "clientPrice": 900.0,
+      "sortOrder": 44
+    },
+    {
+      "id": "22d29c9d-72da-51dc-a673-7678655d5876",
+      "category": "lighting",
+      "name": "Рассеиватель 16мм черный для Световой линии и плинтусов с подсветкой, каскада (2,0м)",
+      "unit": "m",
+      "costPrice": 210.0,
+      "clientPrice": 300.0,
+      "sortOrder": 45
+    },
+    {
+      "id": "686e55d0-2a19-521c-b41c-f3c556bc09e1",
+      "category": "profile",
+      "name": "Профиль ТС Стена-Потолок, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 638.0,
+      "clientPrice": 850.0,
+      "sortOrder": 46
+    },
+    {
+      "id": "5c9b7e97-864f-583a-ac40-daf2cb1af11f",
+      "category": "profile",
+      "name": "Профиль ТС Бокс (Стена-Потолок) черный (2,0м)",
+      "unit": "m",
+      "costPrice": 675.0,
+      "clientPrice": 900.0,
+      "sortOrder": 47
+    },
+    {
+      "id": "74b12a56-0947-5fe5-8417-5221bf535643",
+      "category": "bumper",
+      "name": "Отбойник Круглый ТС, черный (2,0м)",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 48
+    },
+    {
+      "id": "3caa59b6-4637-55fd-9820-bab49e16a383",
+      "category": "divider",
+      "name": "Разделитель ТС под Т-профиль (2,0м)",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 49
+    },
+    {
+      "id": "02dc5b27-a2e6-5cdc-b070-4389ace6bfff",
+      "category": "connector",
+      "name": "Соединитель БАЗОВЫЙ №1 (внутр. угол), Комплект 10шт",
+      "unit": "pack",
+      "costPrice": 1350.0,
+      "clientPrice": 0.0,
+      "sortOrder": 50
+    },
+    {
+      "id": "f98dbc79-3dac-570f-bae2-57fa8abe66e7",
+      "category": "connector",
+      "name": "Соединитель №2 ДВА БАЗОВЫХ С ОТБОЙНИКОМ\n(Для внешних углов) Комплект 10шт",
+      "unit": "pack",
+      "costPrice": 1900.0,
+      "clientPrice": 0.0,
+      "sortOrder": 51
+    },
+    {
+      "id": "2a029878-5a78-5df8-bbbd-782b6d4028de",
+      "category": "connector",
+      "name": "Соединитель №3 ДВА БАЗОВЫХ С ВНУТРЕННИМ УГЛОМ (Для внутренних) Комплект (5шт Левых, 5шт Правых)",
+      "unit": "pack",
+      "costPrice": 1900.0,
+      "clientPrice": 0.0,
+      "sortOrder": 52
+    },
+    {
+      "id": "a07e5ad3-5adb-53fb-8acb-7c30497951f5",
+      "category": "electric",
+      "name": "Закладная РОНДО под розетку/выключатель (пост1)",
+      "unit": "pcs",
+      "costPrice": 350.0,
+      "clientPrice": 450.0,
+      "sortOrder": 54
+    },
+    {
+      "id": "17b6b27b-a6b2-592d-b48a-017682fe8399",
+      "category": "electric",
+      "name": "Закладная РОНДО под розетку/выключатель (пост2)",
+      "unit": "pcs",
+      "costPrice": 600.0,
+      "clientPrice": 800.0,
+      "sortOrder": 55
+    },
+    {
+      "id": "be8b215f-759f-550d-8a98-c516b4e51322",
+      "category": "electric",
+      "name": "Закладная РОНДО под розетку/выключатель (пост3)",
+      "unit": "pcs",
+      "costPrice": 850.0,
+      "clientPrice": 1200.0,
+      "sortOrder": 56
+    },
+    {
+      "id": "a22bda8c-b64d-5dc8-84f0-ec6c56d81b97",
+      "category": "electric",
+      "name": "Закладная РОНДО под розетку/выключатель (пост4)",
+      "unit": "pcs",
+      "costPrice": 1100.0,
+      "clientPrice": 1600.0,
+      "sortOrder": 57
+    },
+    {
+      "id": "ce5b1d7e-f9f2-5ed4-87b0-5d0ae34f67f4",
+      "category": "electric",
+      "name": "Закладная РОНДО под розетку/выключатель (пост5)",
+      "unit": "pcs",
+      "costPrice": 1300.0,
+      "clientPrice": 2000.0,
+      "sortOrder": 58
+    },
+    {
+      "id": "e9ba46c7-e33e-56a9-a732-b17ac6bca9df",
+      "category": "electric",
+      "name": "Закладная под настенный светильник/бра (стандарт)",
+      "unit": "pcs",
+      "costPrice": 300.0,
+      "clientPrice": 450.0,
+      "sortOrder": 59
+    },
+    {
+      "id": "8075c276-cc71-5772-975b-b8efc528d6e5",
+      "category": "electric",
+      "name": "Закладная для навесной техники (мебели, карнизов, зеркал, декора, радиаторов)",
+      "unit": "pcs",
+      "costPrice": 400.0,
+      "clientPrice": 800.0,
+      "sortOrder": 60
+    },
+    {
+      "id": "79e15139-c022-5e8b-881b-5aaf6efb2436",
+      "category": "electric",
+      "name": "Закладная под плинтус (декор, лепнину, молдинг)",
+      "unit": "m",
+      "costPrice": 200.0,
+      "clientPrice": 400.0,
+      "sortOrder": 61
+    },
+    {
+      "id": "d766f18d-8c6f-513a-9d62-cbeae7d0c5a9",
+      "category": "electric",
+      "name": "Нестандартная закладная",
+      "unit": "pcs",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 62
+    },
+    {
+      "id": "a3a6c724-ed94-5955-b8ac-1e24915d4ef3",
+      "category": "electric",
+      "name": "Фанера шлифованная 12мм",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 63
+    },
+    {
+      "id": "8baaf7b8-446f-51f5-b156-bd2e99114c6e",
+      "category": "profile",
+      "name": "Профиль с рассеивателем под диодную ленту (секрет)",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 65
+    },
+    {
+      "id": "f382a15e-23fc-52d2-8f51-e43ee5fa1063",
+      "category": "lighting",
+      "name": "Лента светодиодная COB 24В",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 66
+    },
+    {
+      "id": "1a7dd2da-1f25-55aa-be15-4449973ebbe9",
+      "category": "lighting",
+      "name": "Блок питания 24В",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 67
+    }
+  ],
+  "works": [
+    {
+      "id": "49fbfd7d-0d18-5353-998d-34cedc2cecd2",
+      "category": "mounting",
+      "name": "Монтаж системы (каркас+мембрана+ткань)",
+      "unit": "m2",
+      "costPrice": 700.0,
+      "clientPrice": 1300.0,
+      "sortOrder": 75
+    },
+    {
+      "id": "2885e4da-cbc9-5924-9089-8a75a2d08c29",
+      "category": "mounting",
+      "name": "Монтаж системы (каркас+войлок+ткань)",
+      "unit": "m2",
+      "costPrice": 800.0,
+      "clientPrice": 1400.0,
+      "sortOrder": 76
+    },
+    {
+      "id": "64212546-0c36-548c-8360-22830b4cab33",
+      "category": "additional",
+      "name": "Монтаж профиля Тихие стены (все, кроме каскада)",
+      "unit": "m",
+      "costPrice": 150.0,
+      "clientPrice": 500.0,
+      "sortOrder": 78
+    },
+    {
+      "id": "90552328-69cc-5d55-bead-5d61abea58ba",
+      "category": "additional",
+      "name": "Монтаж мембраны 10мм",
+      "unit": "m2",
+      "costPrice": 150.0,
+      "clientPrice": 350.0,
+      "sortOrder": 79
+    },
+    {
+      "id": "7fc9bed5-3dad-54e7-a18f-8f446eee810c",
+      "category": "additional",
+      "name": "Монтаж войлока 10мм",
+      "unit": "m2",
+      "costPrice": 200.0,
+      "clientPrice": 450.0,
+      "sortOrder": 80
+    },
+    {
+      "id": "35b43c18-5dbf-517c-a632-d57a54b739cb",
+      "category": "additional",
+      "name": "Монтаж тканевого полотна",
+      "unit": "m",
+      "costPrice": 400.0,
+      "clientPrice": 800.0,
+      "sortOrder": 81
+    },
+    {
+      "id": "94cc8cf1-4e9a-556e-b9e9-fe4563d8b5ad",
+      "category": "additional",
+      "name": "Монтаж системы - угол (внешний/внутренний)",
+      "unit": "m",
+      "costPrice": 500.0,
+      "clientPrice": 800.0,
+      "sortOrder": 83
+    },
+    {
+      "id": "f65d0e75-acc3-576c-904c-13f0f76826f2",
+      "category": "additional",
+      "name": "Монтаж системы - профиль тканевый (обернутый)",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 800.0,
+      "sortOrder": 84
+    },
+    {
+      "id": "728ae709-88fe-56a7-85cd-22d8f4db0f34",
+      "category": "additional",
+      "name": "Обработка доп. угла базового (балки, лестницы и т.д)",
+      "unit": "pcs",
+      "costPrice": 50.0,
+      "clientPrice": 150.0,
+      "sortOrder": 85
+    },
+    {
+      "id": "573ca87d-77d4-5a22-818b-26e0ba8882d1",
+      "category": "additional",
+      "name": "Монтаж системы - Теневой разделитель ТС (2 полотна)",
+      "unit": "m",
+      "costPrice": 800.0,
+      "clientPrice": 1600.0,
+      "sortOrder": 86
+    },
+    {
+      "id": "345ce82b-6513-57e2-af02-b358528807b9",
+      "category": "additional",
+      "name": "Обработка углов/торцов/стыков теневого разделителя",
+      "unit": "pcs",
+      "costPrice": 250.0,
+      "clientPrice": 500.0,
+      "sortOrder": 87
+    },
+    {
+      "id": "a4a543bb-6379-5a7a-b98b-a8c351a339bc",
+      "category": "additional",
+      "name": "Монтаж Световой линии ТС (2 полотна)",
+      "unit": "m",
+      "costPrice": 800.0,
+      "clientPrice": 1600.0,
+      "sortOrder": 88
+    },
+    {
+      "id": "3dc5fc4c-49ea-5313-b88a-546466661540",
+      "category": "additional",
+      "name": "Обработка углов/торцов Световая линия ТС",
+      "unit": "pcs",
+      "costPrice": 500.0,
+      "clientPrice": 1000.0,
+      "sortOrder": 89
+    },
+    {
+      "id": "c6372abc-b9c5-57f9-a1f3-c689f6f02a2b",
+      "category": "additional",
+      "name": "Монтаж перекрестий Световая линия ТС",
+      "unit": "pcs",
+      "costPrice": 1000.0,
+      "clientPrice": 2000.0,
+      "sortOrder": 90
+    },
+    {
+      "id": "98500289-1bec-5130-ad48-c0ccb4b139f0",
+      "category": "additional",
+      "name": "Монтаж рассеивателя (каскад, световая линия, плинтус с подсветкой)",
+      "unit": "m",
+      "costPrice": 30.0,
+      "clientPrice": 0.0,
+      "sortOrder": 91
+    },
+    {
+      "id": "70ba1fc1-05e8-5b2e-a688-f305e3055c67",
+      "category": "additional",
+      "name": "Монтаж профиля ТС Каскад",
+      "unit": "m",
+      "costPrice": 400.0,
+      "clientPrice": 1200.0,
+      "sortOrder": 92
+    },
+    {
+      "id": "c4d51f43-5d0f-5e80-98bf-319460b8bbad",
+      "category": "additional",
+      "name": "Монтаж профиля ТС Каскад + ТС Конструктор 5см/Откосный ТС",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 1600.0,
+      "sortOrder": 93
+    },
+    {
+      "id": "8483b1d1-4313-5a50-8931-5e6b87e4f943",
+      "category": "additional",
+      "name": "Обработка углов/торца ТС Каскад",
+      "unit": "pcs",
+      "costPrice": 500.0,
+      "clientPrice": 1000.0,
+      "sortOrder": 94
+    },
+    {
+      "id": "f29ff971-992d-5f79-a66d-3e96510a4b4c",
+      "category": "additional",
+      "name": "Монтаж закладной под розетку/выкл. (до 4х постов)",
+      "unit": "pcs",
+      "costPrice": 250.0,
+      "clientPrice": 600.0,
+      "sortOrder": 95
+    },
+    {
+      "id": "a2ee9f17-1476-50ca-9408-aad4ca83fec1",
+      "category": "additional",
+      "name": "Монтаж розеток,/выключателей (1 пост)",
+      "unit": "pcs",
+      "costPrice": 250.0,
+      "clientPrice": 450.0,
+      "sortOrder": 96
+    },
+    {
+      "id": "47cb4671-58e5-5375-bd6d-96bbd34910d2",
+      "category": "additional",
+      "name": "Обход стандартной двери (90х200)",
+      "unit": "pcs",
+      "costPrice": 3500.0,
+      "clientPrice": 6000.0,
+      "sortOrder": 97
+    },
+    {
+      "id": "53a6071d-15d6-5b9d-8f49-90bf264de106",
+      "category": "additional",
+      "name": "Обход оконного/дверного проема (без откоса)",
+      "unit": "m",
+      "costPrice": 550.0,
+      "clientPrice": 1200.0,
+      "sortOrder": 98
+    },
+    {
+      "id": "2273127a-24c0-53fa-9e6d-331917e77c56",
+      "category": "additional",
+      "name": "Обход оконного/дверного проема (с откосом из тка ни)",
+      "unit": "m",
+      "costPrice": 1100.0,
+      "clientPrice": 2500.0,
+      "sortOrder": 99
+    },
+    {
+      "id": "b953667f-2f9a-5c4c-a80a-d5b036ae41a3",
+      "category": "additional",
+      "name": "Обработка угла на откосе",
+      "unit": "pcs",
+      "costPrice": 250.0,
+      "clientPrice": 500.0,
+      "sortOrder": 100
+    },
+    {
+      "id": "edc9964a-5352-5869-9362-d88a7570613c",
+      "category": "additional",
+      "name": "Обход оконного/дверного проема с закладной под наличник (без откоса)",
+      "unit": "m",
+      "costPrice": 650.0,
+      "clientPrice": 1500.0,
+      "sortOrder": 101
+    },
+    {
+      "id": "fd18ce1e-5cea-5b24-813a-49e6c7953805",
+      "category": "additional",
+      "name": "Монтаж системы на полотно скрытой двери",
+      "unit": "pcs",
+      "costPrice": 3500.0,
+      "clientPrice": 8000.0,
+      "sortOrder": 102
+    },
+    {
+      "id": "a41ed9d3-941d-5477-a59b-015d00181625",
+      "category": "additional",
+      "name": "Монтаж закладной для навесной техники (мебели, карнизов, зеркал, декора, радиаторов)",
+      "unit": "pcs",
+      "costPrice": 350.0,
+      "clientPrice": 1100.0,
+      "sortOrder": 103
+    },
+    {
+      "id": "c9f5c67f-b51d-59b8-85ab-44ff5b056be8",
+      "category": "additional",
+      "name": "Монтаж закладной под плинтус/лепнину/молдинг \n(полоса до 20см)",
+      "unit": "m",
+      "costPrice": 200.0,
+      "clientPrice": 600.0,
+      "sortOrder": 104
+    },
+    {
+      "id": "63675adf-5d14-5172-aec9-8b45e7dfb02f",
+      "category": "additional",
+      "name": "Монтаж фанеры",
+      "unit": "m2",
+      "costPrice": 150.0,
+      "clientPrice": 450.0,
+      "sortOrder": 105
+    },
+    {
+      "id": "4bac8577-d5ae-5973-8ac8-eb2c11f21ec0",
+      "category": "additional",
+      "name": "Монтаж звукоизоляционного материала более 10мм",
+      "unit": "m2",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 106
+    },
+    {
+      "id": "129cd4b1-d2c4-56c5-94fd-9c5a66e03d89",
+      "category": "additional",
+      "name": "Монтаж нестандартной геометрии (перехода, выступы, ниши) ИНДИВИДУАЛЬНО",
+      "unit": "m",
+      "costPrice": 0.0,
+      "clientPrice": 0.0,
+      "sortOrder": 107
+    },
+    {
+      "id": "e23be1c9-7dbe-5fb7-8dc4-f9b9e640fb9e",
+      "category": "additional",
+      "name": "Выравнивание геометрии для формирования оконного/дверного проема (с материалом)",
+      "unit": "m",
+      "costPrice": 500.0,
+      "clientPrice": 1800.0,
+      "sortOrder": 108
+    },
+    {
+      "id": "77b946a9-922e-5398-8e71-189a9529524b",
+      "category": "additional",
+      "name": "Труднодоступный монтаж",
+      "unit": "m",
+      "costPrice": 600.0,
+      "clientPrice": 1400.0,
+      "sortOrder": 109
+    },
+    {
+      "id": "2cf6d169-ee0b-531d-b728-50f712ba13be",
+      "category": "lighting",
+      "name": "Монтаж закладной для настенного светильника (бра)",
+      "unit": "pcs",
+      "costPrice": 350.0,
+      "clientPrice": 1000.0,
+      "sortOrder": 111
+    },
+    {
+      "id": "fc717629-7722-50a4-a321-37442f135e74",
+      "category": "lighting",
+      "name": "Монтаж настенного светильника (бра)",
+      "unit": "pcs",
+      "costPrice": 400.0,
+      "clientPrice": 650.0,
+      "sortOrder": 112
+    },
+    {
+      "id": "79d444fc-89b1-5911-a5a2-801fc0345a7e",
+      "category": "lighting",
+      "name": "Монтаж диодной ленты",
+      "unit": "m",
+      "costPrice": 170.0,
+      "clientPrice": 420.0,
+      "sortOrder": 113
+    },
+    {
+      "id": "0fb607b6-c234-5c50-9227-abe1ca34ed78",
+      "category": "lighting",
+      "name": "Подключение блока питания",
+      "unit": "pcs",
+      "costPrice": 600.0,
+      "clientPrice": 1400.0,
+      "sortOrder": 114
+    },
+    {
+      "id": "51d2568b-7bbe-5ccb-a7be-b453a6014399",
+      "category": "lighting",
+      "name": "Подключение приемника (усилителя, делителя фаз)",
+      "unit": "pcs",
+      "costPrice": 600.0,
+      "clientPrice": 1400.0,
+      "sortOrder": 115
+    },
+    {
+      "id": "5f656eda-e1de-5dc0-82b9-bb5bdbbd29d6",
+      "category": "lighting",
+      "name": "Пайка светодиодной ленты",
+      "unit": "pcs",
+      "costPrice": 100.0,
+      "clientPrice": 250.0,
+      "sortOrder": 116
+    }
+  ]
+}

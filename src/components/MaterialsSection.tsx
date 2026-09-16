@@ -27,13 +27,15 @@ interface MaterialsSectionProps {
 
 const CATEGORY_NAMES: Record<MaterialCategory, string> = {
   fabric: 'Ткани и полотна',
+  insulation: 'Звукоизоляция и мембраны',
   profile: 'Профильные системы',
   plinth: 'Плинтусы и нащельники',
   divider: 'Разделители',
   connector: 'Соединители и углы',
   bumper: 'Демпферы и отбойники',
-  electric: 'Электрика и подсветка',
-  other: 'Звукоизоляция и прочее',
+  electric: 'Закладные и электрика',
+  lighting: 'Освещение и световые линии',
+  other: 'Прочее',
 };
 
 const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
@@ -473,6 +475,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                         <option value="m2">м² (кв. м)</option>
                         <option value="m">м (пог. м)</option>
                         <option value="pcs">шт (штуки)</option>
+                        <option value="pack">упак. (упаковка)</option>
                       </select>
                       {item.category === 'profile' && item.unit === 'pcs' && (
                         <span className="block text-[10px] text-purple-600 font-medium mt-0.5">

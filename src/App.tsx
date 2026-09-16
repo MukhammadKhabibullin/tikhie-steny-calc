@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Project, Room, MaterialItem, CatalogMaterialItem, Organization, AppView } from './types';
+import type { Project, Room, MaterialItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
 import { calculateProjectTotals } from './utils/calculator';
+import { DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
@@ -12,6 +13,7 @@ import { DashboardScreen } from './components/DashboardScreen';
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
+  fetchWorksCatalog,
   seedDefaultCatalogIfEmpty,
   getCurrentSession,
   fetchUserOrganization,
@@ -44,42 +46,43 @@ const INITIAL_PROJECT: Project = {
 
 const INITIAL_ROOMS: Room[] = [];
 
+// Актуальные стартовые позиции по шаблону «Тихие Стены» 2026
 const INITIAL_MATERIALS: MaterialItem[] = [
   {
     id: crypto.randomUUID(),
     category: 'fabric',
-    name: 'Акустическая ткань D-Premium Acoustic (бесшовная, 5.0м)',
+    name: 'ТС КОМФОРТ (3,25м) Россия, 260г/м2',
     unit: 'm2',
-    costPrice: 1650,
-    clientPrice: 2850,
+    costPrice: 1100,
+    clientPrice: 1750,
     quantity: 0,
   },
   {
     id: crypto.randomUUID(),
     category: 'profile',
-    name: 'Профиль пристенный клипсовый TS-Wall Clip (2.0 м)',
+    name: 'Профиль ТС Базовый, черный/белый (2,0м)',
     unit: 'm',
-    costPrice: 320,
-    clientPrice: 580,
+    costPrice: 338,
+    clientPrice: 450,
     quantity: 0,
     profileUnitMode: 'm',
   },
   {
     id: crypto.randomUUID(),
-    category: 'other',
-    name: 'Звукопоглощающая акустическая плита СтопЗвук Эко 50мм',
+    category: 'insulation',
+    name: 'Акустическая мембрана 10мм (1,05м) 250г/м2',
     unit: 'm2',
-    costPrice: 520,
-    clientPrice: 940,
+    costPrice: 400,
+    clientPrice: 600,
     quantity: 0,
   },
   {
     id: crypto.randomUUID(),
     category: 'plinth',
-    name: 'Теневой плинтус / демпферная лента TS-Shadow 15мм',
+    name: 'Плинтус ТС Теневой Мини 15мм, черный (2,0м)',
     unit: 'm',
-    costPrice: 210,
-    clientPrice: 420,
+    costPrice: 600,
+    clientPrice: 800,
     quantity: 0,
   },
 ];
@@ -109,6 +112,7 @@ export function App() {
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalog, setCatalog] = useState<CatalogMaterialItem[]>([]);
+  const [worksCatalog, setWorksCatalog] = useState<CatalogWorkItem[]>(DEFAULT_WORKS);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -170,12 +174,16 @@ export function App() {
     };
   }, []);
 
-  // Загрузка актуального каталога материалов из Supabase при старте приложения
+  // Загрузка актуального каталога материалов и работ из Supabase при старте приложения
   useEffect(() => {
     let isMounted = true;
     const initCatalog = async () => {
       try {
-        const items = await seedDefaultCatalogIfEmpty();
+        const [items, works] = await Promise.all([
+          seedDefaultCatalogIfEmpty(),
+          fetchWorksCatalog(),
+        ]);
+
         if (isMounted && items && items.length > 0) {
           setCatalog(items);
 
@@ -200,6 +208,10 @@ export function App() {
             })
           );
         }
+
+        if (isMounted && works && works.length > 0) {
+          setWorksCatalog(works);
+        }
       } catch (err) {
         console.error('Ошибка инициализации каталога Supabase:', err);
       }
@@ -213,7 +225,7 @@ export function App() {
 
   // Расчет итоговых финансовых показателей и объемов геометрии
   const totals = useMemo(() => {
-    return calculateProjectTotals(rooms, materials, 1400, 750);
+    return calculateProjectTotals(rooms, materials, 1400, 800);
   }, [rooms, materials]);
 
   const totalFabricArea = totals.totalFabricArea;
@@ -225,8 +237,14 @@ export function App() {
 
   // Перезагрузка каталога из Supabase
   const handleRefreshCatalog = useCallback(async () => {
-    const items = await fetchMaterialsCatalog();
+    const [items, works] = await Promise.all([
+      fetchMaterialsCatalog(),
+      fetchWorksCatalog(),
+    ]);
     setCatalog(items);
+    if (works && works.length > 0) {
+      setWorksCatalog(works);
+    }
   }, []);
 
   // Синхронизация цен в текущей смете с базой данных
@@ -664,6 +682,7 @@ export function App() {
         isOpen={isCatalogModalOpen}
         onClose={() => setIsCatalogModalOpen(false)}
         catalog={catalog}
+        worksCatalog={worksCatalog}
         onRefreshCatalog={handleRefreshCatalog}
         onAddToProject={handleAddCatalogItemToProject}
       />

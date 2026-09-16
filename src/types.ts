@@ -10,9 +10,16 @@ export type MaterialCategory =
   | 'connector'
   | 'bumper'
   | 'electric'
+  | 'insulation'
+  | 'lighting'
   | 'other';
 
-export type UnitType = 'm2' | 'm' | 'pcs';
+export type WorkCategory =
+  | 'mounting'
+  | 'additional'
+  | 'lighting';
+
+export type UnitType = 'm2' | 'm' | 'pcs' | 'pack';
 
 export interface Wall {
   id: string;
@@ -65,8 +72,29 @@ export interface CatalogMaterialItem {
   category: MaterialCategory;
   name: string;
   unit: UnitType;
-  costPrice: number; // cost_price
-  clientPrice: number; // client_price
+  costPrice: number; // cost_price (закупка)
+  clientPrice: number; // client_price (клиенту)
+}
+
+export interface CatalogWorkItem {
+  id: string;
+  organizationId?: string | null;
+  category: WorkCategory;
+  name: string;
+  unit: UnitType;
+  costPrice: number; // ЗП монтажников за ед.
+  clientPrice: number; // Стоимость ед. для клиента
+}
+
+export interface WorkItem {
+  id: string;
+  catalogId?: string;
+  category: WorkCategory;
+  name: string;
+  unit: UnitType;
+  costPrice: number;
+  clientPrice: number;
+  quantity: number;
 }
 
 export interface Project {
