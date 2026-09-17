@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Project, Room, MaterialItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
-import { calculateProjectTotals } from './utils/calculator';
+import { calculateProjectTotals, calculateRoomMetrics } from './utils/calculator';
 import { DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
@@ -345,6 +345,82 @@ export function App() {
     }
   }, [project, organization, rooms]);
 
+  // Экспорт коммерческого предложения в буфер обмена
+  const handleExportEstimate = useCallback(() => {
+    const title = project.title.trim() || 'Смета без названия';
+    const clientInfo = [
+      project.clientName ? `Клиент: ${project.clientName}` : null,
+      project.phone ? `Тел: ${project.phone}` : null,
+      project.address ? `Объект: ${project.address}` : null,
+      project.dealId ? `CRM / Сделка: #${project.dealId}` : null,
+    ].filter(Boolean).join(' | ');
+
+    const dateStr = new Date().toLocaleDateString('ru-RU');
+
+    const roomsList = rooms.length > 0
+      ? rooms.map((r, idx) => {
+          const metrics = calculateRoomMetrics(r);
+          const openingsCount = r.openings?.length || 0;
+          const openingsInfo = openingsCount > 0 ? ` (${openingsCount} проемов, вычет ${metrics.openingsArea.toFixed(1)} м²)` : '';
+          return `${idx + 1}. ${r.name}: периметр ${metrics.perimeter} м, высота ${(r.ceilingHeight / 1000).toFixed(2)} м, площадь стен ${metrics.grossWallArea.toFixed(1)} м² (чистая ${metrics.netWallArea.toFixed(1)} м²)${openingsInfo}`;
+        }).join('\n')
+      : '  (Помещения не заданы)';
+
+    const activeMaterials = materials.filter((m) => m.quantity > 0);
+    const materialsList = activeMaterials.length > 0
+      ? activeMaterials.map((m, idx) => {
+          const total = (m.quantity * m.clientPrice).toLocaleString('ru-RU');
+          return `${idx + 1}. ${m.name} — ${m.quantity} ${m.unit} × ${m.clientPrice.toLocaleString('ru-RU')} ₽ = ${total} ₽`;
+        }).join('\n')
+      : '  (Материалы не выбраны или количество 0)';
+
+    const text = [
+      `==================================================`,
+      `КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ — ${organization?.name || '«ТИХИЕ СТЕНЫ»'}`,
+      `==================================================`,
+      `Проект: ${title}`,
+      clientInfo || 'Данные клиента не указаны',
+      `Дата расчета: ${dateStr}`,
+      `--------------------------------------------------`,
+      `ГЕОМЕТРИЯ И ПОМЕЩЕНИЯ:`,
+      roomsList,
+      `--------------------------------------------------`,
+      `МАТЕРИАЛЫ И КОМПЛЕКТУЮЩИЕ:`,
+      materialsList,
+      `--------------------------------------------------`,
+      `ОБЪЕМЫ И СТОИМОСТЬ:`,
+      `• Расход полотна: ${totals.totalFabricArea.toFixed(1)} м²`,
+      `• Профильные системы (с запасом 8%): ${totals.totalProfileLength.toFixed(1)} м пог.`,
+      `• Стоимость материалов: ${totals.materialCost.toLocaleString('ru-RU')} ₽`,
+      `• Монтажные работы: ${totals.installationCost.toLocaleString('ru-RU')} ₽`,
+      `==================================================`,
+      `ИТОГО К ОПЛАТЕ КЛИЕНТОМ: ${totals.totalClientPrice.toLocaleString('ru-RU')} ₽`,
+      `==================================================`,
+    ].join('\n');
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setNotification({
+          type: 'success',
+          message: 'Коммерческое предложение успешно скопировано в буфер обмена!',
+        });
+        setTimeout(() => setNotification(null), 4000);
+      }).catch(() => {
+        setNotification({
+          type: 'error',
+          message: 'Не удалось скопировать смету в буфер обмена',
+        });
+        setTimeout(() => setNotification(null), 4000);
+      });
+    } else {
+      setNotification({
+        type: 'success',
+        message: 'Коммерческое предложение сформировано!',
+      });
+      setTimeout(() => setNotification(null), 4000);
+    }
+  }, [project, rooms, materials, totals, organization]);
+
   // Загрузка сохраненного проекта из Supabase и переход в редактор
   const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[]) => {
     setProject(loadedProject);
@@ -494,76 +570,6 @@ export function App() {
 
           {/* Основной контент */}
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-            {/* Информационный баннер / подсказка */}
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles className="w-5 h-5 text-blue-200" />
-                </div>
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
-                    PRO Смета Multi-Room: Калькулятор драпировки и звукоизоляции «Тихие Стены»
-                  </h2>
-                  <p className="text-xs text-blue-100/90 mt-0.5">
-                    Задайте периметры стен и размеры окон/дверей. Модуль рассчитает точную площадь полотна с вычетами и технологический расход профиля.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-end md:self-auto shrink-0 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleSaveProject}
-                  disabled={isSaving}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition shadow-sm border border-emerald-400/40"
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Сохранение...
-                    </>
-                  ) : (
-                    <>
-                      <CloudUpload className="w-3.5 h-3.5" />
-                      Сохранить проект
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNewProject}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-                  title="Создать новый чистый расчет"
-                >
-                  + Новый
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsProjectsModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-                >
-                  База проектов
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white/15 hover:bg-white/25 text-white transition border border-white/20 backdrop-blur-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Печать
-                </button>
-                <button
-                  type="button"
-                  onClick={() => alert('Смета скопирована в буфер обмена!')}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white text-blue-900 hover:bg-blue-50 transition shadow-sm"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
-                  Экспорт
-                </button>
-              </div>
-            </div>
-
             {/* Блок 1: Конструктор помещений (RoomBuilder) */}
             <section className="space-y-2">
               <div className="flex items-center justify-between px-1">
@@ -631,6 +637,73 @@ export function App() {
                     +{totals.margin.toLocaleString('ru-RU')} ₽ ({totals.marginPercent}%)
                   </div>
                 </div>
+              </div>
+            </section>
+
+            {/* Финальный блок действий: Сохранение, Печать и Экспорт сметы */}
+            <section className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-blue-500/30 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 print:hidden">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0 shadow-inner">
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-blue-200" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
+                      PRO Смета Multi-Room: Расчет готов
+                    </h2>
+                    {lastSavedAt && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                        Сохранено в Supabase
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-2xl leading-relaxed">
+                    Расчет геометрии комнат, проемов и материалов завершен. Сохраните проект в облачную базу данных, отправьте смету на печать или скопируйте коммерческое предложение.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 self-end lg:self-auto shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSaveProject}
+                  disabled={isSaving}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-white transition shadow-md hover:shadow-lg border border-emerald-400/40 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                  title="Сохранить проект, комнаты и смету в облако Supabase"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Сохранение...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-4 h-4" />
+                      <span>Сохранить проект</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white/15 hover:bg-white/25 active:scale-98 text-white transition border border-white/20 backdrop-blur-xs cursor-pointer"
+                  title="Распечатать коммерческое предложение или сохранить как PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Печать</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportEstimate}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white text-blue-900 hover:bg-blue-50 active:scale-98 transition shadow-md hover:shadow-lg cursor-pointer"
+                  title="Скопировать структурированное коммерческое предложение в буфер обмена"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                  <span>Экспорт</span>
+                </button>
               </div>
             </section>
           </main>
