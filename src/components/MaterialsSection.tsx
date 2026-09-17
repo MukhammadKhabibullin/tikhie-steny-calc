@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
 import { calculateProfilePieces, syncMaterialsWithGeometry } from '../utils/calculator';
 import {
@@ -14,6 +15,7 @@ import {
   Database,
   Check,
   BookOpen,
+  ChevronDown,
 } from 'lucide-react';
 import { MaterialPickerModal } from './MaterialPickerModal';
 
@@ -56,6 +58,20 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+
+  // Состояние выпадающего списка категорий для конкретной строки
+  const [openCategoryMenuId, setOpenCategoryMenuId] = useState<string | null>(null);
+  const [categoryMenuCoords, setCategoryMenuCoords] = useState<{
+    top: number;
+    left: number;
+    openUpwards: boolean;
+  }>({
+    top: 0,
+    left: 0,
+    openUpwards: false,
+  });
+  const categoryMenuRef = useRef<HTMLDivElement | null>(null);
+  const activeCategoryTriggerRef = useRef<HTMLElement | null>(null);
 
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
@@ -131,6 +147,87 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
     };
     onUpdateMaterials([...materials, newItem]);
   }, [onAddCatalogItem, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
+
+  // Переключение открытия меню категорий для строки
+  const toggleCategoryMenu = useCallback((lineId: string, triggerElement: HTMLElement) => {
+    if (openCategoryMenuId === lineId) {
+      setOpenCategoryMenuId(null);
+      return;
+    }
+    activeCategoryTriggerRef.current = triggerElement;
+    const rect = triggerElement.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < 280 && rect.top > 280;
+
+    setCategoryMenuCoords({
+      top: openUpwards ? rect.top - 4 : rect.bottom + 4,
+      left: rect.left,
+      openUpwards,
+    });
+    setOpenCategoryMenuId(lineId);
+  }, [openCategoryMenuId]);
+
+  // Выбор новой категории для строки
+  const handleSelectCategory = useCallback(
+    (lineId: string, category: MaterialCategory) => {
+      handleUpdateItem(lineId, { category });
+      setOpenCategoryMenuId(null);
+    },
+    [handleUpdateItem]
+  );
+
+  // Закрытие меню категорий при клике вне его или нажатии Escape
+  useEffect(() => {
+    if (!openCategoryMenuId) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        categoryMenuRef.current &&
+        !categoryMenuRef.current.contains(target) &&
+        !activeCategoryTriggerRef.current?.contains(target)
+      ) {
+        setOpenCategoryMenuId(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenCategoryMenuId(null);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      if (activeCategoryTriggerRef.current) {
+        const rect = activeCategoryTriggerRef.current.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) {
+          setOpenCategoryMenuId(null);
+          return;
+        }
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const openUpwards = spaceBelow < 280 && rect.top > 280;
+        setCategoryMenuCoords({
+          top: openUpwards ? rect.top - 4 : rect.bottom + 4,
+          left: rect.left,
+          openUpwards,
+        });
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openCategoryMenuId]);
 
 
   // Автоматическая привязка объемов из геометрии комнат (ткань, звукоизоляция, профили, плинтусы)
@@ -418,9 +515,26 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded select-none">
-                            {CATEGORY_NAMES[item.category] || item.category}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCategoryMenu(item.id, e.currentTarget);
+                            }}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition cursor-pointer ${
+                              openCategoryMenuId === item.id
+                                ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-300'
+                                : 'text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-800'
+                            }`}
+                            title="Кликните для выбора категории"
+                          >
+                            <span>{CATEGORY_NAMES[item.category] || item.category}</span>
+                            <ChevronDown
+                              className={`w-3 h-3 transition-transform duration-150 ${
+                                openCategoryMenuId === item.id ? 'rotate-180 text-blue-600' : 'text-slate-400'
+                              }`}
+                            />
+                          </button>
                         </div>
                         <input
                           type="text"
@@ -563,6 +677,52 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
         calculatedPlinthLength={calculatedPlinthLength}
         profileViewMode={profileViewMode}
       />
+
+      {/* Выпадающий список категорий для конкретной строки таблицы */}
+      {openCategoryMenuId && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={categoryMenuRef}
+            style={{
+              position: 'fixed',
+              top: categoryMenuCoords.openUpwards ? undefined : `${categoryMenuCoords.top}px`,
+              bottom: categoryMenuCoords.openUpwards
+                ? `${window.innerHeight - categoryMenuCoords.top}px`
+                : undefined,
+              left: `${Math.max(10, Math.min(categoryMenuCoords.left, window.innerWidth - 240))}px`,
+              minWidth: '220px',
+              zIndex: 9999,
+            }}
+            className="bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden py-1 animate-in fade-in zoom-in-95 duration-150 text-xs"
+          >
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 bg-slate-50/70">
+              Категория
+            </div>
+            <div className="max-h-64 overflow-y-auto scrollbar-thin py-0.5">
+              {(Object.entries(CATEGORY_NAMES) as [MaterialCategory, string][]).map(
+                ([catKey, catLabel]) => {
+                  const activeRow = materials.find((m) => m.id === openCategoryMenuId);
+                  const isSelected = activeRow?.category === catKey;
+
+                  return (
+                    <button
+                      key={catKey}
+                      type="button"
+                      onClick={() => handleSelectCategory(openCategoryMenuId, catKey)}
+                      className={`w-full text-left px-3 py-1.5 flex items-center justify-between transition cursor-pointer hover:bg-blue-50 ${
+                        isSelected ? 'bg-blue-50/70 text-blue-700 font-semibold' : 'text-slate-700'
+                      }`}
+                    >
+                      <span>{catLabel}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-2" />}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
