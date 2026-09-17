@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
 import { calculateProfilePieces, syncMaterialsWithGeometry } from '../utils/calculator';
+import { DEFAULT_MATERIALS } from '../data/prices';
 import {
   Package,
   Plus,
@@ -44,6 +45,21 @@ const CATEGORY_NAMES: Record<MaterialCategory, string> = {
   other: 'Прочее',
 };
 
+const formatUnit = (unit: UnitType): string => {
+  switch (unit) {
+    case 'm2':
+      return 'м²';
+    case 'm':
+      return 'пог. м';
+    case 'pcs':
+      return 'шт';
+    case 'pack':
+      return 'упак.';
+    default:
+      return unit;
+  }
+};
+
 const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   materials,
   onUpdateMaterials,
@@ -67,6 +83,28 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   });
   const addMenuRef = useRef<HTMLDivElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Состояние выпадающего списка конкретных позиций базы данных в строке
+  const [openMaterialDropdownId, setOpenMaterialDropdownId] = useState<string | null>(null);
+  const [materialDropdownCoords, setMaterialDropdownCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    openUpwards: boolean;
+  }>({
+    top: 0,
+    left: 0,
+    width: 380,
+    openUpwards: false,
+  });
+  const materialDropdownRef = useRef<HTMLDivElement | null>(null);
+  const activeMaterialTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Резервный каталог материалов по шаблону, если Supabase еще загружается или пуст
+  const catalogPool: CatalogMaterialItem[] = useMemo(() => {
+    if (catalog && catalog.length > 0) return catalog;
+    return DEFAULT_MATERIALS;
+  }, [catalog]);
 
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
@@ -162,7 +200,49 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
     [handleAddItem]
   );
 
-  // Закрытие меню категорий при клике вне его или нажатии Escape
+  // Открытие выпадающего списка конкретных позиций базы данных для строки
+  const openMaterialDropdownForLine = useCallback((lineId: string, triggerElement: HTMLElement | null) => {
+    if (!triggerElement) return;
+    activeMaterialTriggerRef.current = triggerElement;
+    const rect = triggerElement.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpwards = spaceBelow < 250 && rect.top > 250;
+
+    setMaterialDropdownCoords({
+      top: openUpwards ? rect.top - 6 : rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 380),
+      openUpwards,
+    });
+    setOpenMaterialDropdownId(lineId);
+  }, []);
+
+  // Выбор позиции из базы данных: автоматически подставляет название, себестоимость, цену и единицы
+  const handleSelectCatalogItemForLine = useCallback(
+    (lineId: string, catItem: CatalogMaterialItem) => {
+      const updated = materials.map((item) => {
+        if (item.id !== lineId) return item;
+        return {
+          ...item,
+          catalogId: catItem.id,
+          category: catItem.category,
+          name: catItem.name,
+          unit: catItem.unit,
+          costPrice: catItem.costPrice,
+          clientPrice: catItem.clientPrice,
+          profileUnitMode:
+            catItem.category === 'profile'
+              ? (catItem.unit === 'pcs' ? 'pcs' : 'm')
+              : item.profileUnitMode,
+        };
+      });
+      onUpdateMaterials(updated);
+      setOpenMaterialDropdownId(null);
+    },
+    [materials, onUpdateMaterials]
+  );
+
+  // Закрытие меню категорий кнопки добавления при клике вне его или нажатии Escape
   useEffect(() => {
     if (!isAddMenuOpen) return;
 
@@ -211,6 +291,81 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       window.removeEventListener('resize', handleScrollOrResize);
     };
   }, [isAddMenuOpen]);
+
+  // Закрытие выпадающего списка материалов строки при клике вне его или нажатии Escape
+  useEffect(() => {
+    if (!openMaterialDropdownId) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        materialDropdownRef.current &&
+        !materialDropdownRef.current.contains(target) &&
+        !activeMaterialTriggerRef.current?.contains(target)
+      ) {
+        setOpenMaterialDropdownId(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMaterialDropdownId(null);
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      if (activeMaterialTriggerRef.current) {
+        const rect = activeMaterialTriggerRef.current.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) {
+          setOpenMaterialDropdownId(null);
+          return;
+        }
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const openUpwards = spaceBelow < 250 && rect.top > 250;
+        setMaterialDropdownCoords({
+          top: openUpwards ? rect.top - 6 : rect.bottom + 4,
+          left: rect.left,
+          width: Math.max(rect.width, 380),
+          openUpwards,
+        });
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openMaterialDropdownId]);
+
+  // Текущая выбранная строка и позиции каталога, отфильтрованные по её категории
+  const activeMaterialRow = useMemo(() => {
+    if (!openMaterialDropdownId) return null;
+    return materials.find((m) => m.id === openMaterialDropdownId) || null;
+  }, [materials, openMaterialDropdownId]);
+
+  const itemsForActiveCategory = useMemo(() => {
+    if (!activeMaterialRow) return [];
+    const catItems = catalogPool.filter((c) => c.category === activeMaterialRow.category);
+    const query = (activeMaterialRow.name || '').trim().toLowerCase();
+    if (!query) return catItems;
+
+    return [...catItems].sort((a, b) => {
+      const aMatches = a.name.toLowerCase().includes(query);
+      const bMatches = b.name.toLowerCase().includes(query);
+      if (aMatches && !bMatches) return -1;
+      if (!aMatches && bMatches) return 1;
+      return 0;
+    });
+  }, [catalogPool, activeMaterialRow]);
 
 
   // Автоматическая привязка объемов из геометрии комнат (ткань, звукоизоляция, профили, плинтусы)
@@ -502,18 +657,65 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded select-none">
-                            {CATEGORY_NAMES[item.category] || item.category}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openMaterialDropdownForLine(
+                                item.id,
+                                e.currentTarget.closest('td') || e.currentTarget
+                              );
+                            }}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition cursor-pointer ${
+                              openMaterialDropdownId === item.id
+                                ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-300'
+                                : 'text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-800'
+                            }`}
+                            title="Кликните для выбора позиции из каталога этой категории"
+                          >
+                            <span>{CATEGORY_NAMES[item.category] || item.category}</span>
+                            <ChevronDown
+                              className={`w-3 h-3 transition-transform duration-150 ${
+                                openMaterialDropdownId === item.id ? 'rotate-180 text-blue-600' : 'text-slate-400'
+                              }`}
+                            />
+                          </button>
                         </div>
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => handleUpdateItem(item.id, { name: e.target.value })}
-                          autoComplete="off"
-                          spellCheck={false}
-                          className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5"
-                        />
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              handleUpdateItem(item.id, { name: e.target.value });
+                              openMaterialDropdownForLine(item.id, e.currentTarget);
+                            }}
+                            onFocus={(e) => openMaterialDropdownForLine(item.id, e.currentTarget)}
+                            onClick={(e) => openMaterialDropdownForLine(item.id, e.currentTarget)}
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 pr-6 cursor-text"
+                            placeholder="Название материала (кликните для выбора из каталога)..."
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (openMaterialDropdownId === item.id) {
+                                setOpenMaterialDropdownId(null);
+                              } else {
+                                openMaterialDropdownForLine(item.id, e.currentTarget.parentElement);
+                              }
+                            }}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 p-1 rounded cursor-pointer transition"
+                            title="Выбрать материал из базы данных"
+                          >
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                                openMaterialDropdownId === item.id ? 'rotate-180 text-blue-600' : ''
+                              }`}
+                            />
+                          </button>
+                        </div>
                       </div>
                     </td>
 
@@ -679,6 +881,96 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                     <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 transition-colors" />
                   </button>
                 )
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* Выпадающий список конкретных позиций из базы данных прямо в строке таблицы */}
+      {openMaterialDropdownId && activeMaterialRow && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={materialDropdownRef}
+            style={{
+              position: 'fixed',
+              top: materialDropdownCoords.openUpwards ? undefined : `${materialDropdownCoords.top}px`,
+              bottom: materialDropdownCoords.openUpwards
+                ? `${window.innerHeight - materialDropdownCoords.top}px`
+                : undefined,
+              left: `${Math.max(
+                10,
+                Math.min(materialDropdownCoords.left, window.innerWidth - Math.max(materialDropdownCoords.width, 380) - 16)
+              )}px`,
+              width: `${Math.max(materialDropdownCoords.width, 380)}px`,
+              zIndex: 9999,
+            }}
+            className="bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-72 animate-in fade-in zoom-in-95 duration-150 text-xs select-none"
+          >
+            {/* Шапка дропдауна */}
+            <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px]">
+                <Database className="w-3.5 h-3.5 text-blue-600" />
+                <span>Каталог БД • {CATEGORY_NAMES[activeMaterialRow.category] || activeMaterialRow.category}</span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  ({itemsForActiveCategory.length} поз.)
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-400">Esc для закрытия</span>
+            </div>
+
+            {/* Список позиций */}
+            <div className="overflow-y-auto divide-y divide-slate-100 max-h-60 scrollbar-thin">
+              {itemsForActiveCategory.length === 0 ? (
+                <div className="p-4 text-center text-slate-500 text-xs">
+                  Нет позиций в каталоге для категории «{CATEGORY_NAMES[activeMaterialRow.category]}».
+                </div>
+              ) : (
+                itemsForActiveCategory.map((catItem) => {
+                  const isCurrent =
+                    activeMaterialRow.name.trim().toLowerCase() === catItem.name.trim().toLowerCase();
+                  const margin = catItem.clientPrice - catItem.costPrice;
+
+                  return (
+                    <button
+                      key={catItem.id}
+                      type="button"
+                      onClick={() => handleSelectCatalogItemForLine(activeMaterialRow.id, catItem)}
+                      className={`w-full text-left px-3 py-2.5 hover:bg-blue-50/80 transition flex items-center justify-between gap-3 group cursor-pointer ${
+                        isCurrent ? 'bg-blue-50/60' : ''
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800 text-xs group-hover:text-blue-700 truncate">
+                            {catItem.name}
+                          </span>
+                          {isCurrent && (
+                            <span className="shrink-0 text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold">
+                              ✓ Выбрано
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          <span>Закупка: {catItem.costPrice.toLocaleString('ru-RU')} ₽</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-emerald-700 font-medium">
+                            Маржа: +{margin.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="font-bold text-blue-700 font-mono text-xs">
+                          {catItem.clientPrice.toLocaleString('ru-RU')} ₽
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          за {formatUnit(catItem.unit)}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>,
