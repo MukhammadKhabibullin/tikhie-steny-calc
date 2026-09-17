@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
-import { calculateProfilePieces } from '../utils/calculator';
+import { calculateProfilePieces, syncMaterialsWithGeometry } from '../utils/calculator';
 import {
   Package,
   Plus,
@@ -11,7 +11,8 @@ import {
   Search,
   Filter,
   RefreshCw,
-  Database
+  Database,
+  Check,
 } from 'lucide-react';
 
 interface MaterialsSectionProps {
@@ -19,6 +20,7 @@ interface MaterialsSectionProps {
   onUpdateMaterials: (materials: MaterialItem[]) => void;
   calculatedFabricArea: number;
   calculatedProfileLength: number;
+  calculatedPlinthLength?: number;
   catalog?: CatalogMaterialItem[];
   onOpenCatalogModal?: () => void;
   onSyncPricesWithCatalog?: () => void;
@@ -43,6 +45,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   onUpdateMaterials,
   calculatedFabricArea,
   calculatedProfileLength,
+  calculatedPlinthLength,
   catalog,
   onOpenCatalogModal,
   onSyncPricesWithCatalog,
@@ -53,6 +56,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
+
+  // Индикатор обратной связи при ручном заполнении по геометрии
+  const [syncFeedback, setSyncFeedback] = useState(false);
 
   const handleUpdateItem = useCallback((id: string, fields: Partial<MaterialItem>) => {
     const updated = materials.map((item) => {
@@ -69,7 +75,16 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   const handleAddItem = useCallback((category: MaterialCategory = 'fabric') => {
     const matchingCatalog = catalog?.find((c) => c.category === category);
     const defaultUnit: UnitType =
-      matchingCatalog?.unit || (category === 'fabric' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs');
+      matchingCatalog?.unit || (category === 'fabric' || category === 'insulation' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs');
+
+    const defaultQty =
+      category === 'fabric' || category === 'insulation'
+        ? calculatedFabricArea
+        : category === 'profile'
+        ? (profileViewMode === 'pcs' ? calculateProfilePieces(calculatedProfileLength, 2) : calculatedProfileLength)
+        : category === 'plinth'
+        ? (calculatedPlinthLength || calculatedProfileLength)
+        : 1;
 
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
@@ -79,18 +94,27 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       unit: defaultUnit,
       costPrice: matchingCatalog ? matchingCatalog.costPrice : 500,
       clientPrice: matchingCatalog ? matchingCatalog.clientPrice : 900,
-      quantity: category === 'fabric' ? calculatedFabricArea : 10,
-      profileUnitMode: 'm',
+      quantity: defaultQty,
+      profileUnitMode: profileViewMode,
     };
 
     onUpdateMaterials([...materials, newItem]);
-  }, [catalog, calculatedFabricArea, materials, onUpdateMaterials]);
+  }, [catalog, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
 
   const handleAddFromCatalog = useCallback((catItem: CatalogMaterialItem) => {
     if (onAddCatalogItem) {
       onAddCatalogItem(catItem);
       return;
     }
+    const defaultQty =
+      catItem.category === 'fabric' || catItem.category === 'insulation'
+        ? calculatedFabricArea
+        : catItem.category === 'profile'
+        ? (catItem.unit === 'pcs' || profileViewMode === 'pcs' ? calculateProfilePieces(calculatedProfileLength, 2) : calculatedProfileLength)
+        : catItem.category === 'plinth'
+        ? (catItem.unit === 'pcs' ? calculateProfilePieces(calculatedPlinthLength || calculatedProfileLength, 2) : (calculatedPlinthLength || calculatedProfileLength))
+        : 1;
+
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
       catalogId: catItem.id,
@@ -99,11 +123,11 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       unit: catItem.unit,
       costPrice: catItem.costPrice,
       clientPrice: catItem.clientPrice,
-      quantity: catItem.category === 'fabric' ? calculatedFabricArea : 10,
-      profileUnitMode: 'm',
+      quantity: defaultQty,
+      profileUnitMode: catItem.unit === 'pcs' ? 'pcs' : 'm',
     };
     onUpdateMaterials([...materials, newItem]);
-  }, [onAddCatalogItem, calculatedFabricArea, materials, onUpdateMaterials]);
+  }, [onAddCatalogItem, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
 
   const handleSelectCatalogItemForLine = useCallback((lineId: string, catItem: CatalogMaterialItem) => {
     const updated = materials.map((item) => {
@@ -121,24 +145,27 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
     onUpdateMaterials(updated);
   }, [materials, onUpdateMaterials]);
 
-  // Автоматическая привязка объемов из геометрии комнат
+  // Автоматическая привязка объемов из геометрии комнат (ткань, звукоизоляция, профили, плинтусы)
   const handleSyncWithGeometry = useCallback(() => {
-    const updated = materials.map((item) => {
-      if (item.category === 'fabric') {
-        return { ...item, quantity: calculatedFabricArea, unit: 'm2' as UnitType };
-      }
-      if (item.category === 'profile') {
-        if (profileViewMode === 'pcs') {
-          const pieces = calculateProfilePieces(calculatedProfileLength, 2);
-          return { ...item, quantity: pieces, unit: 'pcs' as UnitType };
-        } else {
-          return { ...item, quantity: calculatedProfileLength, unit: 'm' as UnitType };
-        }
-      }
-      return item;
-    });
+    const effectivePlinthLength = calculatedPlinthLength || calculatedProfileLength;
+    const updated = syncMaterialsWithGeometry(
+      materials,
+      calculatedFabricArea,
+      calculatedProfileLength,
+      effectivePlinthLength,
+      profileViewMode
+    );
     onUpdateMaterials(updated);
-  }, [materials, calculatedFabricArea, calculatedProfileLength, profileViewMode, onUpdateMaterials]);
+    setSyncFeedback(true);
+    setTimeout(() => setSyncFeedback(false), 2500);
+  }, [
+    materials,
+    calculatedFabricArea,
+    calculatedProfileLength,
+    calculatedPlinthLength,
+    profileViewMode,
+    onUpdateMaterials,
+  ]);
 
   // Переключение режима профилей (метры <-> штуки по 2м)
   const toggleProfileMode = useCallback(() => {
@@ -271,11 +298,22 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
           <button
             type="button"
             onClick={handleSyncWithGeometry}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition shadow-2xs"
-            title="Заполнить объемы ткани и профилей по расчетам комнат"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition shadow-2xs cursor-pointer active:scale-98 ${
+              syncFeedback
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-2 ring-emerald-200'
+                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200'
+            }`}
+            title="Заполнить объемы ткани, профилей и плинтусов по расчетам геометрии комнат"
           >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            Заполнить по геометрии ({calculatedFabricArea} м² / {calculatedProfileLength} м)
+            {syncFeedback ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600 animate-in zoom-in" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            )}
+            <span>{syncFeedback ? 'Синхронизировано!' : 'Заполнить по геометрии'}</span>
+            <span className="text-[11px] font-mono font-bold text-blue-800 bg-blue-100/80 px-1.5 py-0.5 rounded">
+              {calculatedFabricArea} м² / {calculatedProfileLength} м
+            </span>
           </button>
         </div>
       </div>

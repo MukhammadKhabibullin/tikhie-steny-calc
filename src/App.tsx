@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Project, Room, MaterialItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
-import { calculateProjectTotals, calculateRoomMetrics } from './utils/calculator';
+import {
+  calculateProjectTotals,
+  calculateRoomMetrics,
+  calculateTotalRoomMetrics,
+  syncMaterialsWithGeometry,
+  calculateProfilePieces,
+} from './utils/calculator';
 import { DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
@@ -230,6 +236,25 @@ export function App() {
 
   const totalFabricArea = totals.totalFabricArea;
   const totalProfileLength = totals.totalProfileLength;
+  const totalPlinthLength = totals.totalPlinthLength || totals.totalProfileLength;
+
+  // Реактивное обновление комнат и автоматическая синхронизация объемов материалов
+  const handleUpdateRooms = useCallback((newRooms: Room[]) => {
+    setRooms(newRooms);
+
+    const { totalFabricArea, totalProfileLength, totalPlinthLength } = calculateTotalRoomMetrics(newRooms);
+
+    if (totalFabricArea > 0 || totalProfileLength > 0) {
+      setMaterials((prevMaterials) =>
+        syncMaterialsWithGeometry(
+          prevMaterials,
+          totalFabricArea,
+          totalProfileLength,
+          totalPlinthLength
+        )
+      );
+    }
+  }, []);
 
   const handleUpdateProject = useCallback((fields: Partial<Project>) => {
     setProject((prev) => ({ ...prev, ...fields }));
@@ -288,6 +313,15 @@ export function App() {
 
   // Добавление позиции из каталога напрямую в проект
   const handleAddCatalogItemToProject = useCallback((catItem: CatalogMaterialItem) => {
+    const defaultQty =
+      catItem.category === 'fabric' || catItem.category === 'insulation'
+        ? totalFabricArea
+        : catItem.category === 'profile'
+        ? (catItem.unit === 'pcs' ? calculateProfilePieces(totalProfileLength, 2) : totalProfileLength)
+        : catItem.category === 'plinth'
+        ? (catItem.unit === 'pcs' ? calculateProfilePieces(totalPlinthLength, 2) : totalPlinthLength)
+        : 1;
+
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
       catalogId: catItem.id,
@@ -296,8 +330,8 @@ export function App() {
       unit: catItem.unit,
       costPrice: catItem.costPrice,
       clientPrice: catItem.clientPrice,
-      quantity: catItem.category === 'fabric' ? totalFabricArea : 10,
-      profileUnitMode: 'm',
+      quantity: defaultQty,
+      profileUnitMode: catItem.unit === 'pcs' ? 'pcs' : 'm',
     };
 
     setMaterials((prev) => [...prev, newItem]);
@@ -306,7 +340,7 @@ export function App() {
       message: `Позиция «${catItem.name}» добавлена в смету с актуальной ценой из базы!`,
     });
     setTimeout(() => setNotification(null), 4000);
-  }, [totalFabricArea]);
+  }, [totalFabricArea, totalProfileLength, totalPlinthLength]);
 
   // Сохранение в Supabase
   const handleSaveProject = useCallback(async () => {
@@ -426,6 +460,17 @@ export function App() {
     setProject(loadedProject);
     if (loadedRooms && loadedRooms.length > 0) {
       setRooms(loadedRooms);
+      const { totalFabricArea, totalProfileLength, totalPlinthLength } = calculateTotalRoomMetrics(loadedRooms);
+      if (totalFabricArea > 0 || totalProfileLength > 0) {
+        setMaterials((prevMaterials) =>
+          syncMaterialsWithGeometry(
+            prevMaterials,
+            totalFabricArea,
+            totalProfileLength,
+            totalPlinthLength
+          )
+        );
+      }
     }
     setLastSavedAt(new Date().toISOString());
     setCurrentView('editor');
@@ -583,7 +628,7 @@ export function App() {
                   Высота потолков и проемы с автовычетом
                 </div>
               </div>
-              <RoomBuilder rooms={rooms} onUpdateRooms={setRooms} />
+              <RoomBuilder rooms={rooms} onUpdateRooms={handleUpdateRooms} />
             </section>
 
             {/* Блок 2: Спецификация материалов и профилей (MaterialsSection) */}
@@ -604,6 +649,7 @@ export function App() {
                 onUpdateMaterials={setMaterials}
                 calculatedFabricArea={totalFabricArea}
                 calculatedProfileLength={totalProfileLength}
+                calculatedPlinthLength={totalPlinthLength}
                 catalog={catalog}
                 onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
                 onSyncPricesWithCatalog={handleSyncPricesWithCatalog}

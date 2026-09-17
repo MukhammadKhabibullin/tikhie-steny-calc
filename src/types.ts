@@ -109,8 +109,13 @@ export interface Project {
 }
 
 export interface CalculationResult {
-  totalFabricArea: number; // м²
-  totalProfileLength: number; // пог. м
+  totalFabricArea: number; // м² (с технологическим запасом)
+  totalProfileLength: number; // пог. м (с запасом 8%)
+  totalPlinthLength?: number; // пог. м плинтуса (с запасом 5%)
+  totalPerimeter?: number; // чистый периметр стен (м)
+  totalNetWallArea?: number; // чистая площадь стен за вычетом проемов (м²)
+  totalGrossWallArea?: number; // общая площадь стен без вычетов (м²)
+  totalOpeningsArea?: number; // площадь проемов (м²)
   materialCost: number; // себестоимость материалов (руб)
   installationCost: number; // стоимость монтажа (руб)
   totalClientPrice: number; // общая цена для клиента (руб)
@@ -124,5 +129,7 @@ export interface RoomCalculationResult {
   grossWallArea: number; // м²
   openingsArea: number; // м²
   netWallArea: number; // м²
+  fabricAreaWithReserve?: number; // м² (с запасом)
   profileLengthWithReserve: number; // м
+  plinthLengthWithReserve?: number; // м
 }
