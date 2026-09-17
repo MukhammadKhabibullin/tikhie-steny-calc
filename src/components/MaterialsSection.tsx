@@ -13,7 +13,9 @@ import {
   RefreshCw,
   Database,
   Check,
+  BookOpen,
 } from 'lucide-react';
+import { MaterialPickerModal } from './MaterialPickerModal';
 
 interface MaterialsSectionProps {
   materials: MaterialItem[];
@@ -53,6 +55,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isPickerModalOpen, setIsPickerModalOpen] = useState(false);
 
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
@@ -129,21 +132,6 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
     onUpdateMaterials([...materials, newItem]);
   }, [onAddCatalogItem, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
 
-  const handleSelectCatalogItemForLine = useCallback((lineId: string, catItem: CatalogMaterialItem) => {
-    const updated = materials.map((item) => {
-      if (item.id !== lineId) return item;
-      return {
-        ...item,
-        catalogId: catItem.id,
-        category: catItem.category,
-        name: catItem.name,
-        unit: catItem.unit,
-        costPrice: catItem.costPrice,
-        clientPrice: catItem.clientPrice,
-      };
-    });
-    onUpdateMaterials(updated);
-  }, [materials, onUpdateMaterials]);
 
   // Автоматическая привязка объемов из геометрии комнат (ткань, звукоизоляция, профили, плинтусы)
   const handleSyncWithGeometry = useCallback(() => {
@@ -362,30 +350,21 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
             );
           })}
 
-          {/* Быстрое добавление из каталога БД */}
-          {catalog && catalog.length > 0 && (
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                const found = catalog.find((c) => c.id === e.target.value);
-                if (found) {
-                  handleAddFromCatalog(found);
-                  e.target.value = '';
-                }
-              }}
-              className="text-xs bg-blue-50/70 hover:bg-blue-100/70 border border-blue-200 text-blue-800 font-semibold rounded-lg px-2.5 py-1 outline-none cursor-pointer max-w-[170px] truncate shrink-0"
-              title="Добавить позицию напрямую из каталога Supabase"
-            >
-              <option value="" disabled>+ Из каталога БД...</option>
-              {catalog
-                .filter((c) => selectedCategory === 'all' || c.category === selectedCategory)
-                .map((catItem) => (
-                  <option key={catItem.id} value={catItem.id}>
-                    {catItem.name} ({catItem.clientPrice} ₽/{catItem.unit})
-                  </option>
-                ))}
-            </select>
-          )}
+          {/* Кнопка открытия полноценного каталога материалов по категориям */}
+          <button
+            type="button"
+            onClick={() => setIsPickerModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition shrink-0 shadow-2xs cursor-pointer active:scale-98"
+            title="Открыть структурированный каталог материалов по категориям для быстрого добавления в смету"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Выбрать из каталога БД</span>
+            {catalog && catalog.length > 0 && (
+              <span className="bg-blue-500 text-blue-100 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                {catalog.length}
+              </span>
+            )}
+          </button>
 
           <button
             type="button"
@@ -454,41 +433,6 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                               </option>
                             ))}
                           </select>
-
-                          {item.catalogId ? (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium border border-blue-200/60"
-                              title="Позиция связана с каталогом Supabase"
-                            >
-                              <Database className="w-2.5 h-2.5" />
-                              Каталог БД
-                            </span>
-                          ) : null}
-
-                          {/* Выпадающий список выбора из каталога текущей категории */}
-                          {catalog && catalog.some((c) => c.category === item.category) && (
-                            <select
-                              defaultValue=""
-                              onChange={(e) => {
-                                const found = catalog.find((c) => c.id === e.target.value);
-                                if (found) {
-                                  handleSelectCatalogItemForLine(item.id, found);
-                                  e.target.value = '';
-                                }
-                              }}
-                              className="text-[10px] text-slate-600 bg-transparent hover:bg-slate-100 rounded px-1 py-0.5 border border-dashed border-slate-300 outline-none cursor-pointer max-w-[150px] truncate ml-auto"
-                              title="Выбрать позицию из каталога для автозаполнения цен"
-                            >
-                              <option value="" disabled>Из каталога БД...</option>
-                              {catalog
-                                .filter((c) => c.category === item.category)
-                                .map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name} ({c.clientPrice} ₽)
-                                  </option>
-                                ))}
-                            </select>
-                          )}
                         </div>
                         <input
                           type="text"
@@ -616,6 +560,19 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Модальное окно выбора материалов из каталога по категориям */}
+      <MaterialPickerModal
+        isOpen={isPickerModalOpen}
+        onClose={() => setIsPickerModalOpen(false)}
+        catalog={catalog}
+        existingMaterials={materials}
+        onSelectCatalogItem={handleAddFromCatalog}
+        calculatedFabricArea={calculatedFabricArea}
+        calculatedProfileLength={calculatedProfileLength}
+        calculatedPlinthLength={calculatedPlinthLength}
+        profileViewMode={profileViewMode}
+      />
     </div>
   );
 };
