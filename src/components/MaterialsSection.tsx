@@ -55,7 +55,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isPickerModalOpen, setIsPickerModalOpen] = useState(false);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   // Глобальный или локальный режим для профилей: в метрах или в штуках по 2м
   const [profileViewMode, setProfileViewMode] = useState<'m' | 'pcs'>('m');
@@ -353,7 +353,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
           {/* Кнопка открытия полноценного каталога материалов по категориям */}
           <button
             type="button"
-            onClick={() => setIsPickerModalOpen(true)}
+            onClick={() => setIsCatalogOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition shrink-0 shadow-2xs cursor-pointer active:scale-98"
             title="Открыть структурированный каталог материалов по категориям для быстрого добавления в смету"
           >
@@ -563,8 +563,8 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 
       {/* Модальное окно выбора материалов из каталога по категориям */}
       <MaterialPickerModal
-        isOpen={isPickerModalOpen}
-        onClose={() => setIsPickerModalOpen(false)}
+        isOpen={isCatalogOpen}
+        onClose={() => setIsCatalogOpen(false)}
         catalog={catalog}
         existingMaterials={materials}
         onSelectCatalogItem={handleAddFromCatalog}
