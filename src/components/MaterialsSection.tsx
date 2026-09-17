@@ -417,27 +417,17 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                     </td>
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <select
-                            value={item.category}
-                            onChange={(e) =>
-                              handleUpdateItem(item.id, {
-                                category: e.target.value as MaterialCategory,
-                              })
-                            }
-                            className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded border-none cursor-pointer"
-                          >
-                            {Object.entries(CATEGORY_NAMES).map(([key, label]) => (
-                              <option key={key} value={key}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded select-none">
+                            {CATEGORY_NAMES[item.category] || item.category}
+                          </span>
                         </div>
                         <input
                           type="text"
                           value={item.name}
                           onChange={(e) => handleUpdateItem(item.id, { name: e.target.value })}
+                          autoComplete="off"
+                          spellCheck={false}
                           className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5"
                         />
                       </div>
