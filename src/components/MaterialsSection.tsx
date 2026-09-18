@@ -657,29 +657,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openMaterialDropdownForLine(
-                                item.id,
-                                e.currentTarget.closest('td') || e.currentTarget
-                              );
-                            }}
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition cursor-pointer ${
-                              openMaterialDropdownId === item.id
-                                ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-300'
-                                : 'text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-800'
-                            }`}
-                            title="Кликните для выбора позиции из каталога этой категории"
-                          >
-                            <span>{CATEGORY_NAMES[item.category] || item.category}</span>
-                            <ChevronDown
-                              className={`w-3 h-3 transition-transform duration-150 ${
-                                openMaterialDropdownId === item.id ? 'rotate-180 text-blue-600' : 'text-slate-400'
-                              }`}
-                            />
-                          </button>
+                          <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 select-none">
+                            {CATEGORY_NAMES[item.category] || item.category}
+                          </span>
                         </div>
                         <div className="relative flex items-center">
                           <input
