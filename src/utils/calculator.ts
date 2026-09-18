@@ -1,4 +1,5 @@
 import type { Room, MaterialItem, CalculationResult, RoomCalculationResult } from '../types';
+import { OVERHEAD_RATE } from '../data/prices';
 
 /**
  * Конвертация миллиметров в метры
@@ -212,11 +213,32 @@ export const calculateProfilePieces = (meters: number, pieceLengthM: number = 2)
 };
 
 /**
+ * Расчет накладных и транспортных расходов (автономная статья расходов)
+ * 6% от клиентской стоимости материалов, но не менее 6 500 руб.
+ * Если смета пуста (нет выбранных материалов и нулевая площадь), возвращает 0.
+ *
+ * @param materialsClientPrice суммарная стоимость материалов для клиента (руб)
+ * @param hasActiveItems флаг наличия активных позиций или геометрии в смете
+ * @param rate параметры процентной ставки и минимального порога (по умолчанию 6% и 6 500 руб.)
+ */
+export const calculateOverheadExpenses = (
+  materialsClientPrice: number,
+  hasActiveItems: boolean = true,
+  rate: { percent: number; minAmount: number } = OVERHEAD_RATE
+): number => {
+  if (!hasActiveItems || materialsClientPrice <= 0) {
+    return 0;
+  }
+  const calculated = roundTo(materialsClientPrice * rate.percent);
+  return Math.max(rate.minAmount, calculated);
+};
+
+/**
  * Расчет итоговых финансовых показателей проекта (оптимизирован для предотвращения повторных обходов)
  * @param rooms список комнат
  * @param materials список материалов
- * @param installationRatePerM2 базовая ставка монтажа за м² (для клиента)
- * @param installationCostPriceRate ставка себестоимости монтажа за м² (оплата монтажникам)
+ * @param installationRatePerM2 базовая ставка монтажа за м² (для клиента, по умолчанию 1 400 ₽)
+ * @param installationCostPriceRate ставка себестоимости монтажа за м² (оплата монтажникам, по умолчанию 800 ₽)
  */
 export const calculateProjectTotals = (
   rooms: Room[],
@@ -225,7 +247,8 @@ export const calculateProjectTotals = (
   installationCostPriceRate: number = 800,
   profileReserveFactor: number = PROFILE_RESERVE_FACTOR,
   fabricReserveFactor: number = FABRIC_RESERVE_FACTOR,
-  plinthReserveFactor: number = PLINTH_RESERVE_FACTOR
+  plinthReserveFactor: number = PLINTH_RESERVE_FACTOR,
+  overheadRate: { percent: number; minAmount: number } = OVERHEAD_RATE
 ): CalculationResult => {
   const {
     totalFabricArea,
@@ -240,13 +263,17 @@ export const calculateProjectTotals = (
   const materialsCost = calculateMaterialsCostPrice(materials);
   const materialsClient = calculateMaterialsClientPrice(materials);
 
-  // Стоимость монтажа (рассчитывается от чистой площади покрытия ткани)
-  const installationCost = roundTo(totalFabricArea * installationCostPriceRate);
+  // Стоимость монтажа (чистая стоимость работ для клиента и себестоимость оплаты мастерам)
+  const installationCostPrice = roundTo(totalFabricArea * installationCostPriceRate);
   const installationClient = roundTo(totalFabricArea * installationRatePerM2);
 
+  // Накладные и транспортные расходы (автономная статья расходов: 6% от материалов, но минимум 6 500 руб.)
+  const hasActiveItems = (materials && materials.some((m) => m.quantity > 0)) || totalFabricArea > 0;
+  const overheadCost = calculateOverheadExpenses(materialsClient, hasActiveItems, overheadRate);
+
   // Итого себестоимость и итого клиенту
-  const totalCostPrice = materialsCost + installationCost;
-  const totalClientPrice = materialsClient + installationClient;
+  const totalCostPrice = roundTo(materialsCost + installationCostPrice);
+  const totalClientPrice = roundTo(materialsClient + installationClient + overheadCost);
 
   // Чистая прибыль (маржа)
   const margin = roundTo(totalClientPrice - totalCostPrice);
@@ -261,7 +288,10 @@ export const calculateProjectTotals = (
     totalGrossWallArea,
     totalOpeningsArea,
     materialCost: materialsCost,
+    materialClientPrice: materialsClient,
     installationCost: installationClient,
+    installationCostPrice,
+    overheadCost,
     totalClientPrice,
     margin,
     marginPercent,

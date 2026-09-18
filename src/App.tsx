@@ -11,6 +11,7 @@ import { DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
+import { SummarySection } from './components/SummarySection';
 import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { CatalogManagerModal } from './components/CatalogManagerModal';
 import { AuthScreen } from './components/AuthScreen';
@@ -31,7 +32,6 @@ import {
   FileSpreadsheet,
   Printer,
   Sparkles,
-  HelpCircle,
   CloudUpload,
   Loader2,
   CheckCircle2,
@@ -425,8 +425,9 @@ export function App() {
       `ОБЪЕМЫ И СТОИМОСТЬ:`,
       `• Расход полотна: ${totals.totalFabricArea.toFixed(1)} м²`,
       `• Профильные системы (с запасом 8%): ${totals.totalProfileLength.toFixed(1)} м пог.`,
-      `• Стоимость материалов: ${totals.materialCost.toLocaleString('ru-RU')} ₽`,
+      `• Стоимость материалов: ${totals.materialClientPrice.toLocaleString('ru-RU')} ₽`,
       `• Монтажные работы: ${totals.installationCost.toLocaleString('ru-RU')} ₽`,
+      `• Накладные и транспортные расходы: ${totals.overheadCost.toLocaleString('ru-RU')} ₽`,
       `==================================================`,
       `ИТОГО К ОПЛАТЕ КЛИЕНТОМ: ${totals.totalClientPrice.toLocaleString('ru-RU')} ₽`,
       `==================================================`,
@@ -657,34 +658,8 @@ export function App() {
               />
             </section>
 
-            {/* Финальный блок резюме сделки */}
-            <section className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="space-y-1">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
-                  <HelpCircle className="w-4 h-4 text-blue-600" />
-                  Структура коммерческого предложения
-                </div>
-                <p className="text-sm text-slate-600 max-w-xl">
-                  Итоговая смета включает ткань, профильные системы с запасом 8%, наполнители и монтажные работы по ставке 1 400 ₽/м².
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-                <div className="text-right">
-                  <div className="text-xs text-slate-600 font-medium">К оплате клиентом</div>
-                  <div className="text-2xl font-black text-blue-600 font-mono">
-                    {totals.totalClientPrice.toLocaleString('ru-RU')} ₽
-                  </div>
-                </div>
-                <div className="h-10 w-px bg-slate-200"></div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-600 font-medium">Маржинальная прибыль</div>
-                  <div className="text-xl font-bold text-emerald-600 font-mono">
-                    +{totals.margin.toLocaleString('ru-RU')} ₽ ({totals.marginPercent}%)
-                  </div>
-                </div>
-              </div>
-            </section>
+            {/* Блок 3: Итоговое коммерческое предложение и структура затрат (SummarySection) */}
+            <SummarySection results={totals} organizationName={organization?.name} />
 
             {/* Финальный блок действий: Сохранение, Печать и Экспорт сметы */}
             <section className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white p-5 sm:p-6 rounded-2xl shadow-lg border border-blue-500/30 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 print:hidden">

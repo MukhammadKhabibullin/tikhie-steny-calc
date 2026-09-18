@@ -18,7 +18,8 @@ import {
   BookOpen,
   Settings,
   LogOut,
-  ArrowLeft
+  ArrowLeft,
+  Truck
 } from 'lucide-react';
 
 interface ProjectHeaderProps {
@@ -276,7 +277,7 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
         </div>
 
         {/* Дашборд с финансовыми карточками и метриками */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Себестоимость / Закупка */}
           <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-slate-300 transition shadow-sm">
             <div className="flex items-center justify-between text-slate-600 mb-1">
@@ -301,7 +302,22 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
               {formatCurrency(results.installationCost)}
             </div>
             <div className="text-[11px] text-indigo-600 mt-0.5">
-              Работы и установка
+              Чистые работы
+            </div>
+          </div>
+
+          {/* Накладные и транспортные расходы */}
+          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 hover:border-amber-300 transition shadow-sm">
+            <div className="flex items-center justify-between text-amber-800 mb-1">
+              <span className="text-xs font-semibold uppercase tracking-wider">Доставка / Накладные</span>
+              <Truck className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-lg sm:text-xl font-bold text-amber-950">
+              {formatCurrency(results.overheadCost)}
+            </div>
+            <div className="text-[11px] text-amber-700 mt-0.5 flex items-center justify-between">
+              <span>Логистика</span>
+              <span className="font-mono text-[10px] bg-amber-100 px-1 rounded">мин. 6 500 ₽</span>
             </div>
           </div>
 
@@ -320,7 +336,7 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
           </div>
 
           {/* Маржа */}
-          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 hover:border-emerald-300 transition shadow-sm">
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 hover:border-emerald-300 transition shadow-sm col-span-2 md:col-span-1">
             <div className="flex items-center justify-between text-emerald-700 mb-1">
               <span className="text-xs font-semibold uppercase tracking-wider">Маржа</span>
               <TrendingUp className="w-4 h-4 text-emerald-600" />
