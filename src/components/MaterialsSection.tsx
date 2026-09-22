@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
-import { calculateProfilePieces, syncMaterialsWithGeometry } from '../utils/calculator';
+import { calculateProfilePieces, syncMaterialsWithGeometry, extractCatalogPrices } from '../utils/calculator';
 import { DEFAULT_MATERIALS } from '../data/prices';
 import {
   Package,
@@ -138,14 +138,19 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
         ? (calculatedPlinthLength || calculatedProfileLength)
         : 1;
 
+    const { costPrice, clientPrice, price } = extractCatalogPrices(matchingCatalog);
+    const finalCostPrice = matchingCatalog ? costPrice : 500;
+    const finalClientPrice = matchingCatalog ? clientPrice : 900;
+
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
       catalogId: matchingCatalog?.id,
       category,
       name: matchingCatalog ? matchingCatalog.name : `Новый материал (${CATEGORY_NAMES[category]})`,
       unit: defaultUnit,
-      costPrice: matchingCatalog ? matchingCatalog.costPrice : 500,
-      clientPrice: matchingCatalog ? matchingCatalog.clientPrice : 900,
+      costPrice: finalCostPrice,
+      clientPrice: finalClientPrice,
+      price: matchingCatalog ? price : 900,
       quantity: defaultQty,
       profileUnitMode: profileViewMode,
     };
@@ -154,8 +159,16 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   }, [catalog, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
 
   const handleAddFromCatalog = useCallback((catItem: CatalogMaterialItem) => {
+    const { costPrice, clientPrice, price } = extractCatalogPrices(catItem);
+    const normalizedCatItem: CatalogMaterialItem = {
+      ...catItem,
+      costPrice,
+      clientPrice,
+      price,
+    };
+
     if (onAddCatalogItem) {
-      onAddCatalogItem(catItem);
+      onAddCatalogItem(normalizedCatItem);
       return;
     }
     const defaultQty =
@@ -173,8 +186,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       category: catItem.category,
       name: catItem.name,
       unit: catItem.unit,
-      costPrice: catItem.costPrice,
-      clientPrice: catItem.clientPrice,
+      costPrice,
+      clientPrice,
+      price,
       quantity: defaultQty,
       profileUnitMode: catItem.unit === 'pcs' ? 'pcs' : 'm',
     };
@@ -220,6 +234,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   // Выбор позиции из базы данных: автоматически подставляет название, себестоимость, цену и единицы
   const handleSelectCatalogItemForLine = useCallback(
     (lineId: string, catItem: CatalogMaterialItem) => {
+      const { costPrice, clientPrice, price } = extractCatalogPrices(catItem);
       const updated = materials.map((item) => {
         if (item.id !== lineId) return item;
         return {
@@ -228,8 +243,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
           category: catItem.category,
           name: catItem.name,
           unit: catItem.unit,
-          costPrice: catItem.costPrice,
-          clientPrice: catItem.clientPrice,
+          costPrice,
+          clientPrice,
+          price,
           profileUnitMode:
             catItem.category === 'profile'
               ? (catItem.unit === 'pcs' ? 'pcs' : 'm')
@@ -405,7 +421,8 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
             unit: 'pcs' as UnitType,
             quantity: pieces,
             costPrice: Math.round(item.costPrice * 2),
-            clientPrice: Math.round(item.clientPrice * 2),
+            clientPrice: Math.round((item.clientPrice ?? item.price ?? 0) * 2),
+            price: Math.round((item.clientPrice ?? item.price ?? 0) * 2),
             profileUnitMode: 'pcs' as const,
           };
         } else if (nextMode === 'm' && item.unit === 'pcs') {
@@ -415,7 +432,8 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
             unit: 'm' as UnitType,
             quantity: meters,
             costPrice: Math.round(item.costPrice / 2),
-            clientPrice: Math.round(item.clientPrice / 2),
+            clientPrice: Math.round((item.clientPrice ?? item.price ?? 0) / 2),
+            price: Math.round((item.clientPrice ?? item.price ?? 0) / 2),
             profileUnitMode: 'm' as const,
           };
         }
@@ -442,7 +460,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   // Расчет суммарных итогов по спецификации с мемоизацией
   const { totalCost, totalClient, totalMargin } = useMemo(() => {
     const cost = materials.reduce((acc, i) => acc + (Number(i.costPrice) || 0) * (Number(i.quantity) || 0), 0);
-    const client = materials.reduce((acc, i) => acc + (Number(i.clientPrice) || 0) * (Number(i.quantity) || 0), 0);
+    const client = materials.reduce((acc, i) => acc + (Number(i.clientPrice ?? i.price) || 0) * (Number(i.quantity) || 0), 0);
     return {
       totalCost: cost,
       totalClient: client,
@@ -645,8 +663,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
               </tr>
             ) : (
               filteredMaterials.map((item, index) => {
-                const subCost = item.costPrice * item.quantity;
-                const subClient = item.clientPrice * item.quantity;
+                const subCost = (Number(item.costPrice) || 0) * (Number(item.quantity) || 0);
+                const currentClientPrice = Number(item.clientPrice ?? item.price) || 0;
+                const subClient = currentClientPrice * (Number(item.quantity) || 0);
                 const subMargin = subClient - subCost;
 
                 return (
@@ -738,7 +757,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                       />
                     </td>
 
-                    {/* Себестоимость */}
+                    {/* Себестоимость (закупочная цена) */}
                     <td className="py-2.5 px-3 text-right">
                       <div className="relative">
                         <input
@@ -751,23 +770,27 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                           }
                           className="w-28 text-right font-mono text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
                           min={0}
+                          title="Себестоимость / закупочная цена за ед."
                         />
                       </div>
                     </td>
 
-                    {/* Цена клиенту */}
+                    {/* Цена клиенту (розничная цена) */}
                     <td className="py-2.5 px-3 text-right">
                       <div className="relative">
                         <input
                           type="number"
-                          value={item.clientPrice}
-                          onChange={(e) =>
+                          value={item.clientPrice ?? item.price ?? 0}
+                          onChange={(e) => {
+                            const newPrice = Math.max(0, Number(e.target.value) || 0);
                             handleUpdateItem(item.id, {
-                              clientPrice: Math.max(0, Number(e.target.value) || 0),
-                            })
-                          }
+                              clientPrice: newPrice,
+                              price: newPrice,
+                            });
+                          }}
                           className="w-28 text-right font-mono font-bold text-blue-700 bg-blue-50/50 border border-blue-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
                           min={0}
+                          title="Цена клиенту / розничная цена за ед."
                         />
                       </div>
                     </td>
@@ -909,7 +932,8 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                 itemsForActiveCategory.map((catItem) => {
                   const isCurrent =
                     activeMaterialRow.name.trim().toLowerCase() === catItem.name.trim().toLowerCase();
-                  const margin = catItem.clientPrice - catItem.costPrice;
+                  const { costPrice, clientPrice } = extractCatalogPrices(catItem);
+                  const margin = clientPrice - costPrice;
 
                   return (
                     <button
@@ -932,7 +956,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                           )}
                         </div>
                         <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span>Закупка: {catItem.costPrice.toLocaleString('ru-RU')} ₽</span>
+                          <span>Закупка: {costPrice.toLocaleString('ru-RU')} ₽</span>
                           <span className="text-slate-300">•</span>
                           <span className="text-emerald-700 font-medium">
                             Маржа: +{margin.toLocaleString('ru-RU')} ₽
@@ -942,7 +966,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 
                       <div className="text-right shrink-0">
                         <div className="font-bold text-blue-700 font-mono text-xs">
-                          {catItem.clientPrice.toLocaleString('ru-RU')} ₽
+                          {clientPrice.toLocaleString('ru-RU')} ₽
                         </div>
                         <div className="text-[10px] text-slate-400">
                           за {formatUnit(catItem.unit)}

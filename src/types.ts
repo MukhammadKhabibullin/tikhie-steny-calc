@@ -49,8 +49,9 @@ export interface MaterialItem {
   category: MaterialCategory;
   name: string;
   unit: UnitType;
-  costPrice: number; // себестоимость за ед. (руб)
-  clientPrice: number; // цена для клиента за ед. (руб)
+  costPrice: number; // себестоимость / цена закупки за ед. (руб)
+  clientPrice: number; // цена для клиента / розничная цена за ед. (руб)
+  price?: number; // розничная цена / цена клиенту (алиас для clientPrice)
   quantity: number; // количество
   profileUnitMode?: 'm' | 'pcs'; // режим для профиля: метры или 2-метровые штуки
 }
@@ -72,8 +73,11 @@ export interface CatalogMaterialItem {
   category: MaterialCategory;
   name: string;
   unit: UnitType;
-  costPrice: number; // cost_price (закупка)
-  clientPrice: number; // client_price (клиенту)
+  costPrice: number; // cost_price (закупка / себестоимость)
+  clientPrice: number; // client_price (розница / цена клиенту)
+  price?: number; // розничная цена / цена клиенту (алиас clientPrice)
+  cost_price?: number; // совместимость со структурой Supabase
+  client_price?: number; // совместимость со структурой Supabase
 }
 
 export interface CatalogWorkItem {

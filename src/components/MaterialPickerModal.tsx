@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { CatalogMaterialItem, MaterialItem, MaterialCategory, UnitType } from '../types';
 import { DEFAULT_MATERIALS } from '../data/prices';
-import { calculateProfilePieces } from '../utils/calculator';
+import { calculateProfilePieces, extractCatalogPrices } from '../utils/calculator';
 import {
   Search,
   X,
@@ -177,7 +177,14 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
   };
 
   const handleAdd = (item: CatalogMaterialItem) => {
-    onSelectCatalogItem(item);
+    const { costPrice, clientPrice, price } = extractCatalogPrices(item);
+    const normalizedItem: CatalogMaterialItem = {
+      ...item,
+      costPrice,
+      clientPrice,
+      price,
+    };
+    onSelectCatalogItem(normalizedItem);
     setRecentlyAddedIds((prev) => new Set(prev).add(item.id));
     setAddedCount((c) => c + 1);
 
@@ -358,9 +365,10 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
                 {/* Сетка карточек материалов */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   {group.items.map((item) => {
-                    const margin = item.clientPrice - item.costPrice;
+                    const { costPrice, clientPrice } = extractCatalogPrices(item);
+                    const margin = clientPrice - costPrice;
                     const marginPercent =
-                      item.clientPrice > 0 ? Math.round((margin / item.clientPrice) * 100) : 0;
+                      clientPrice > 0 ? Math.round((margin / clientPrice) * 100) : 0;
                     const isRecentlyAdded = recentlyAddedIds.has(item.id);
 
                     // Проверяем, есть ли позиция уже в проекте
@@ -408,7 +416,7 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
                           <div className="space-y-0.5">
                             <div className="flex items-baseline gap-1.5">
                               <span className="text-sm font-extrabold text-blue-700 font-mono">
-                                {item.clientPrice.toLocaleString('ru-RU')} ₽
+                                {clientPrice.toLocaleString('ru-RU')} ₽
                               </span>
                               <span className="text-[11px] text-slate-500">
                                 / {formatUnit(item.unit)}
@@ -416,7 +424,7 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
                             </div>
 
                             <div className="text-[10px] text-slate-500 flex items-center gap-1.5">
-                              <span>Закупка: {item.costPrice.toLocaleString('ru-RU')} ₽</span>
+                              <span>Закупка: {costPrice.toLocaleString('ru-RU')} ₽</span>
                               <span className="text-slate-300">•</span>
                               <span className="text-emerald-700 font-semibold font-mono">
                                 +{margin.toLocaleString('ru-RU')} ₽ ({marginPercent}%)

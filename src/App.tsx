@@ -6,6 +6,7 @@ import {
   calculateTotalRoomMetrics,
   syncMaterialsWithGeometry,
   calculateProfilePieces,
+  extractCatalogPrices,
 } from './utils/calculator';
 import { DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
@@ -61,6 +62,7 @@ const INITIAL_MATERIALS: MaterialItem[] = [
     unit: 'm2',
     costPrice: 1100,
     clientPrice: 1750,
+    price: 1750,
     quantity: 0,
   },
   {
@@ -70,6 +72,7 @@ const INITIAL_MATERIALS: MaterialItem[] = [
     unit: 'm',
     costPrice: 338,
     clientPrice: 450,
+    price: 450,
     quantity: 0,
     profileUnitMode: 'm',
   },
@@ -80,6 +83,7 @@ const INITIAL_MATERIALS: MaterialItem[] = [
     unit: 'm2',
     costPrice: 400,
     clientPrice: 600,
+    price: 600,
     quantity: 0,
   },
   {
@@ -89,6 +93,7 @@ const INITIAL_MATERIALS: MaterialItem[] = [
     unit: 'm',
     costPrice: 600,
     clientPrice: 800,
+    price: 800,
     quantity: 0,
   },
 ];
@@ -203,11 +208,13 @@ export function App() {
                   c.category === mat.category
               );
               if (matched) {
+                const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
                 return {
                   ...mat,
                   catalogId: matched.id,
-                  costPrice: matched.costPrice,
-                  clientPrice: matched.clientPrice,
+                  costPrice,
+                  clientPrice,
+                  price,
                 };
               }
               return mat;
@@ -292,11 +299,13 @@ export function App() {
       );
       if (matched) {
         updatedCount++;
+        const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
         return {
           ...mat,
           catalogId: matched.id,
-          costPrice: matched.costPrice,
-          clientPrice: matched.clientPrice,
+          costPrice,
+          clientPrice,
+          price,
           unit: matched.unit,
         };
       }
@@ -322,14 +331,17 @@ export function App() {
         ? (catItem.unit === 'pcs' ? calculateProfilePieces(totalPlinthLength, 2) : totalPlinthLength)
         : 1;
 
+    const { costPrice, clientPrice, price } = extractCatalogPrices(catItem);
+
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
       catalogId: catItem.id,
       category: catItem.category,
       name: catItem.name,
       unit: catItem.unit,
-      costPrice: catItem.costPrice,
-      clientPrice: catItem.clientPrice,
+      costPrice,
+      clientPrice,
+      price,
       quantity: defaultQty,
       profileUnitMode: catItem.unit === 'pcs' ? 'pcs' : 'm',
     };
@@ -337,7 +349,7 @@ export function App() {
     setMaterials((prev) => [...prev, newItem]);
     setNotification({
       type: 'success',
-      message: `Позиция «${catItem.name}» добавлена в смету с актуальной ценой из базы!`,
+      message: `Позиция «${catItem.name}» добавлена в смету (себестоимость: ${costPrice.toLocaleString('ru-RU')} ₽, клиенту: ${clientPrice.toLocaleString('ru-RU')} ₽)!`,
     });
     setTimeout(() => setNotification(null), 4000);
   }, [totalFabricArea, totalProfileLength, totalPlinthLength]);

@@ -290,14 +290,21 @@ export async function fetchMaterialsCatalog(): Promise<CatalogMaterialItem[]> {
       return DEFAULT_MATERIALS;
     }
 
-    return data.map((row) => ({
-      id: row.id,
-      category: (row.category || 'other') as MaterialCategory,
-      name: row.name || 'Без названия',
-      unit: (row.unit || 'm2') as UnitType,
-      costPrice: Number(row.cost_price) || 0,
-      clientPrice: Number(row.client_price) || 0,
-    }));
+    return data.map((row) => {
+      const costPrice = Number(row.cost_price ?? (row as Record<string, unknown>).costPrice ?? 0);
+      const clientPrice = Number(row.client_price ?? (row as Record<string, unknown>).clientPrice ?? (row as Record<string, unknown>).price ?? 0);
+      return {
+        id: row.id,
+        category: (row.category || 'other') as MaterialCategory,
+        name: row.name || 'Без названия',
+        unit: (row.unit || 'm2') as UnitType,
+        costPrice,
+        clientPrice,
+        price: clientPrice,
+        cost_price: costPrice,
+        client_price: clientPrice,
+      };
+    });
   } catch (err) {
     console.error('Исключение при получении materials_catalog:', err);
     return DEFAULT_MATERIALS;
@@ -334,14 +341,21 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
       return DEFAULT_MATERIALS;
     }
 
-    return data.map((row) => ({
-      id: row.id,
-      category: (row.category || 'other') as MaterialCategory,
-      name: row.name || 'Без названия',
-      unit: (row.unit || 'm2') as UnitType,
-      costPrice: Number(row.cost_price) || 0,
-      clientPrice: Number(row.client_price) || 0,
-    }));
+    return data.map((row) => {
+      const costPrice = Number(row.cost_price ?? (row as Record<string, unknown>).costPrice ?? 0);
+      const clientPrice = Number(row.client_price ?? (row as Record<string, unknown>).clientPrice ?? (row as Record<string, unknown>).price ?? 0);
+      return {
+        id: row.id,
+        category: (row.category || 'other') as MaterialCategory,
+        name: row.name || 'Без названия',
+        unit: (row.unit || 'm2') as UnitType,
+        costPrice,
+        clientPrice,
+        price: clientPrice,
+        cost_price: costPrice,
+        client_price: clientPrice,
+      };
+    });
   } catch (err) {
     console.error('Исключение при заполнении каталога:', err);
     return DEFAULT_MATERIALS;
@@ -470,13 +484,18 @@ export async function saveCatalogItemToSupabase(
       return { success: false, error: error?.message || 'Не удалось сохранить позицию' };
     }
 
+    const costPrice = Number(data.cost_price ?? item.costPrice ?? 0);
+    const clientPrice = Number(data.client_price ?? item.clientPrice ?? item.price ?? 0);
     const saved: CatalogMaterialItem = {
       id: data.id,
       category: data.category as MaterialCategory,
       name: data.name,
       unit: data.unit as UnitType,
-      costPrice: Number(data.cost_price) || 0,
-      clientPrice: Number(data.client_price) || 0,
+      costPrice,
+      clientPrice,
+      price: clientPrice,
+      cost_price: costPrice,
+      client_price: clientPrice,
     };
 
     return { success: true, item: saved };

@@ -1,4 +1,4 @@
-import type { Room, MaterialItem, CalculationResult, RoomCalculationResult } from '../types';
+import type { Room, MaterialItem, CatalogMaterialItem, CalculationResult, RoomCalculationResult } from '../types';
 import { OVERHEAD_RATE } from '../data/prices';
 
 /**
@@ -183,6 +183,49 @@ export const calculateTotalProfileLength = (
 };
 
 /**
+ * Надежное извлечение себестоимости и розничной цены (цены клиенту)
+ * из позиции каталога или объекта базы данных.
+ *
+ * 1. Себестоимость (закупочная цена): costPrice, cost_price, purchasePrice, cost
+ * 2. Цена клиенту (розничная цена): clientPrice, client_price, price, retailPrice
+ */
+export const extractCatalogPrices = (
+  item?: Partial<CatalogMaterialItem> | Record<string, unknown> | null
+): { costPrice: number; clientPrice: number; price: number } => {
+  if (!item) {
+    return { costPrice: 0, clientPrice: 0, price: 0 };
+  }
+
+  const rawCost =
+    item.costPrice ??
+    item.cost_price ??
+    (item as Record<string, unknown>).purchasePrice ??
+    (item as Record<string, unknown>).purchase_price ??
+    (item as Record<string, unknown>).cost ??
+    0;
+
+  const rawClient =
+    item.clientPrice ??
+    item.client_price ??
+    item.price ??
+    (item as Record<string, unknown>).retailPrice ??
+    (item as Record<string, unknown>).retail_price ??
+    0;
+
+  const costNum = Number(rawCost);
+  const clientNum = Number(rawClient);
+
+  const costPrice = isNaN(costNum) ? 0 : Math.max(0, costNum);
+  const clientPrice = isNaN(clientNum) ? 0 : Math.max(0, clientNum);
+
+  return {
+    costPrice,
+    clientPrice,
+    price: clientPrice,
+  };
+};
+
+/**
  * Расчет себестоимости материалов (руб)
  */
 export const calculateMaterialsCostPrice = (materials: MaterialItem[]): number => {
@@ -199,7 +242,8 @@ export const calculateMaterialsCostPrice = (materials: MaterialItem[]): number =
 export const calculateMaterialsClientPrice = (materials: MaterialItem[]): number => {
   if (!materials || materials.length === 0) return 0;
   const total = materials.reduce((acc, item) => {
-    return acc + (Number(item.clientPrice) || 0) * (Number(item.quantity) || 0);
+    const price = Number(item.clientPrice ?? item.price ?? 0);
+    return acc + price * (Number(item.quantity) || 0);
   }, 0);
   return roundTo(total);
 };

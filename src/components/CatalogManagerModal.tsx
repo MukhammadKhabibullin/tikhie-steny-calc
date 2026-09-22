@@ -13,6 +13,7 @@ import {
   deleteWorkItemFromSupabase,
   syncAllCatalogFromTemplate,
 } from '../services/supabaseClient';
+import { extractCatalogPrices } from '../utils/calculator';
 import {
   BookOpen,
   Wrench,
@@ -161,13 +162,14 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
   };
 
   const handleStartEditMaterial = (item: CatalogMaterialItem) => {
+    const { costPrice, clientPrice } = extractCatalogPrices(item);
     setEditingId(item.id);
     setEditMatFields({
       category: item.category,
       name: item.name,
       unit: item.unit,
-      costPrice: item.costPrice,
-      clientPrice: item.clientPrice,
+      costPrice,
+      clientPrice,
     });
   };
 
@@ -608,7 +610,8 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {filteredMaterials.map((item, index) => {
                     const isEditing = editingId === item.id;
-                    const margin = item.clientPrice - item.costPrice;
+                    const { costPrice, clientPrice, price } = extractCatalogPrices(item);
+                    const margin = clientPrice - costPrice;
 
                     if (isEditing) {
                       return (
@@ -734,10 +737,10 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
                           </span>
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                          {item.costPrice.toLocaleString('ru-RU')} ₽
+                          {costPrice.toLocaleString('ru-RU')} ₽
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono font-bold text-blue-700">
-                          {item.clientPrice.toLocaleString('ru-RU')} ₽
+                          {clientPrice.toLocaleString('ru-RU')} ₽
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono font-semibold text-emerald-700">
                           +{margin.toLocaleString('ru-RU')} ₽
@@ -747,7 +750,7 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
                             {onAddToProject && (
                               <button
                                 type="button"
-                                onClick={() => onAddToProject(item)}
+                                onClick={() => onAddToProject({ ...item, costPrice, clientPrice, price })}
                                 className="inline-flex items-center gap-0.5 px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[11px] font-semibold border border-blue-200 transition mr-1"
                                 title="В смету"
                               >
