@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.materials_catalog (
 );
 
 -- Добавляем колонку sort_order, если ее еще нет
-DO 35757
+DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
@@ -26,7 +26,7 @@ BEGIN
     ) THEN
         ALTER TABLE public.materials_catalog ADD COLUMN sort_order INT DEFAULT 0;
     END IF;
-END 35757;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_materials_catalog_cat ON public.materials_catalog(category);
 

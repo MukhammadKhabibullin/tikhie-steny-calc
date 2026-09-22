@@ -321,14 +321,13 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
       return existing;
     }
 
-    const rowsToInsert = DEFAULT_CATALOG_SEEDS.map((item, idx) => ({
+    const rowsToInsert = DEFAULT_CATALOG_SEEDS.map((item) => ({
       id: item.id,
       category: item.category,
       name: item.name,
       unit: item.unit,
       cost_price: item.costPrice,
       client_price: item.clientPrice,
-      sort_order: idx + 1,
     }));
 
     const { data, error } = await supabase
@@ -546,14 +545,13 @@ export async function syncAllCatalogFromTemplate(): Promise<{
         .in('id', existingMaterials.map((m) => m.id));
     }
 
-    const materialRows = DEFAULT_MATERIALS.map((m, idx) => ({
+    const materialRows = DEFAULT_MATERIALS.map((m) => ({
       id: m.id,
       category: m.category,
       name: m.name,
       unit: m.unit,
       cost_price: m.costPrice,
       client_price: m.clientPrice,
-      sort_order: idx + 1,
     }));
 
     const { error: matErr } = await supabase.from('materials_catalog').insert(materialRows);
