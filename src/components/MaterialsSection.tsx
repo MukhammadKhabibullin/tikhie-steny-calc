@@ -125,7 +125,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   }, [materials, onUpdateMaterials]);
 
   const handleAddItem = useCallback((category: MaterialCategory = 'fabric') => {
-    const matchingCatalog = catalog?.find((c) => c.category === category);
+    const matchingCatalog = catalogPool.find((c) => c.category === category);
     const defaultUnit: UnitType =
       matchingCatalog?.unit || (category === 'fabric' || category === 'insulation' ? 'm2' : category === 'profile' || category === 'plinth' ? 'm' : 'pcs');
 
@@ -139,8 +139,6 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
         : 1;
 
     const { costPrice, clientPrice, price } = extractCatalogPrices(matchingCatalog);
-    const finalCostPrice = matchingCatalog ? costPrice : 500;
-    const finalClientPrice = matchingCatalog ? clientPrice : 900;
 
     const newItem: MaterialItem = {
       id: crypto.randomUUID(),
@@ -148,15 +146,15 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       category,
       name: matchingCatalog ? matchingCatalog.name : `Новый материал (${CATEGORY_NAMES[category]})`,
       unit: defaultUnit,
-      costPrice: finalCostPrice,
-      clientPrice: finalClientPrice,
-      price: matchingCatalog ? price : 900,
+      costPrice,
+      clientPrice,
+      price,
       quantity: defaultQty,
       profileUnitMode: profileViewMode,
     };
 
     onUpdateMaterials([...materials, newItem]);
-  }, [catalog, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
+  }, [catalogPool, calculatedFabricArea, calculatedProfileLength, calculatedPlinthLength, profileViewMode, materials, onUpdateMaterials]);
 
   const handleAddFromCatalog = useCallback((catItem: CatalogMaterialItem) => {
     const { costPrice, clientPrice, price } = extractCatalogPrices(catItem);
@@ -844,7 +842,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       <MaterialPickerModal
         isOpen={isCatalogOpen}
         onClose={() => setIsCatalogOpen(false)}
-        catalog={catalog}
+        catalog={catalogPool}
         existingMaterials={materials}
         onSelectCatalogItem={handleAddFromCatalog}
         calculatedFabricArea={calculatedFabricArea}

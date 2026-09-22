@@ -291,7 +291,7 @@ export const DEFAULT_MATERIALS: CatalogMaterialItem[] = [
     name: 'Соединитель БАЗОВЫЙ №1 (внутр. угол), Комплект 10шт',
     unit: 'pack',
     costPrice: 1350.0,
-    clientPrice: 0.0,
+    clientPrice: 1900.0,
   },
   {
     id: 'f98dbc79-3dac-570f-bae2-57fa8abe66e7',
@@ -299,7 +299,7 @@ export const DEFAULT_MATERIALS: CatalogMaterialItem[] = [
     name: 'Соединитель №2 ДВА БАЗОВЫХ С ОТБОЙНИКОМ (Для внешних углов) Комплект 10шт',
     unit: 'pack',
     costPrice: 1900.0,
-    clientPrice: 0.0,
+    clientPrice: 2600.0,
   },
   {
     id: '2a029878-5a78-5df8-bbbd-782b6d4028de',
@@ -307,7 +307,7 @@ export const DEFAULT_MATERIALS: CatalogMaterialItem[] = [
     name: 'Соединитель №3 ДВА БАЗОВЫХ С ВНУТРЕННИМ УГЛОМ (Для внутренних) Комплект (5шт Левых, 5шт Правых)',
     unit: 'pack',
     costPrice: 1900.0,
-    clientPrice: 0.0,
+    clientPrice: 2600.0,
   },
   {
     id: 'a07e5ad3-5adb-53fb-8acb-7c30497951f5',
@@ -538,7 +538,7 @@ export const DEFAULT_WORKS: CatalogWorkItem[] = [
     name: 'Монтаж рассеивателя (каскад, световая линия, плинтус с подсветкой)',
     unit: 'm',
     costPrice: 30.0,
-    clientPrice: 0.0,
+    clientPrice: 80.0,
   },
   {
     id: '70ba1fc1-05e8-5b2e-a688-f305e3055c67',
