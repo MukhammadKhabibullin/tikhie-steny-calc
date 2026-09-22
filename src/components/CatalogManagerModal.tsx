@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type {
   CatalogMaterialItem,
   CatalogWorkItem,
@@ -124,8 +124,6 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
     costPrice: 0,
     clientPrice: 0,
   });
-
-  if (!isOpen) return null;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -320,22 +318,34 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
   };
 
   // Фильтрация материалов
-  const filteredMaterials = catalog.filter((item) => {
-    const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      MATERIAL_CATEGORY_LABELS[item.category]?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const filteredMaterials = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    return catalog.filter((item) => {
+      const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
+      if (!matchCat) return false;
+      if (!query) return true;
+      return (
+        item.name.toLowerCase().includes(query) ||
+        MATERIAL_CATEGORY_LABELS[item.category]?.toLowerCase().includes(query)
+      );
+    });
+  }, [catalog, selectedCategory, searchQuery]);
 
   // Фильтрация работ
-  const filteredWorks = worksCatalog.filter((item) => {
-    const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      WORK_CATEGORY_LABELS[item.category]?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const filteredWorks = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    return worksCatalog.filter((item) => {
+      const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
+      if (!matchCat) return false;
+      if (!query) return true;
+      return (
+        item.name.toLowerCase().includes(query) ||
+        WORK_CATEGORY_LABELS[item.category]?.toLowerCase().includes(query)
+      );
+    });
+  }, [worksCatalog, selectedCategory, searchQuery]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">

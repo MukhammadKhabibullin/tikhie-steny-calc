@@ -266,49 +266,145 @@ export async function fetchProjectRoomsWithWalls(projectId: string): Promise<Roo
  */
 export const DEFAULT_CATALOG_SEEDS: CatalogMaterialItem[] = DEFAULT_MATERIALS;
 
+// ==============================================================================
+// Кэширование справочников (In-Memory + LocalStorage с TTL и дедупликацией)
+// ==============================================================================
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 минут
+const LS_MATERIALS_CACHE_KEY = 'ts_materials_catalog_cache_v2';
+const LS_WORKS_CACHE_KEY = 'ts_works_catalog_cache_v2';
+
+interface CacheEnvelope<T> {
+  data: T;
+  timestamp: number;
+}
+
+let inMemoryMaterialsCache: CacheEnvelope<CatalogMaterialItem[]> | null = null;
+let inMemoryWorksCache: CacheEnvelope<CatalogWorkItem[]> | null = null;
+let materialsInFlightPromise: Promise<CatalogMaterialItem[]> | null = null;
+let worksInFlightPromise: Promise<CatalogWorkItem[]> | null = null;
+
+function loadFromStorage<T>(key: string): CacheEnvelope<T> | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as CacheEnvelope<T>;
+    if (envelope && typeof envelope.timestamp === 'number' && Array.isArray(envelope.data) && envelope.data.length > 0) {
+      if (Date.now() - envelope.timestamp < CACHE_TTL_MS) {
+        return envelope;
+      }
+    }
+  } catch {
+    // Игнорируем ошибки доступа к localStorage
+  }
+  return null;
+}
+
+function saveToStorage<T>(key: string, data: T): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const envelope: CacheEnvelope<T> = {
+      data,
+      timestamp: Date.now(),
+    };
+    window.localStorage.setItem(key, JSON.stringify(envelope));
+  } catch {
+    // Игнорируем ошибки записи
+  }
+}
+
+/**
+ * Принудительный сброс кэша справочников при мутациях
+ */
+export function invalidateCatalogCache(): void {
+  inMemoryMaterialsCache = null;
+  inMemoryWorksCache = null;
+  materialsInFlightPromise = null;
+  worksInFlightPromise = null;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(LS_MATERIALS_CACHE_KEY);
+      window.localStorage.removeItem(LS_WORKS_CACHE_KEY);
+    }
+  } catch {
+    // Игнорируем
+  }
+}
+
 /**
  * Базовый набор монтажных и дополнительных работ (39 позиций из шаблона 2026)
  */
 export const DEFAULT_WORKS_SEEDS: CatalogWorkItem[] = DEFAULT_WORKS;
 
 /**
- * Загрузка актуального каталога материалов из Supabase
+ * Загрузка актуального каталога материалов из Supabase с кэшированием
  */
-export async function fetchMaterialsCatalog(): Promise<CatalogMaterialItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from('materials_catalog')
-      .select('id, category, name, unit, cost_price, client_price')
-      .order('category', { ascending: true });
+export async function fetchMaterialsCatalog(options?: { forceRefresh?: boolean }): Promise<CatalogMaterialItem[]> {
+  const forceRefresh = options?.forceRefresh ?? false;
 
-    if (error) {
-      console.warn('Ошибка загрузки materials_catalog из Supabase, используем шаблонные цены:', error.message);
-      return DEFAULT_MATERIALS;
-    }
-
-    if (!data || data.length === 0) {
-      return DEFAULT_MATERIALS;
-    }
-
-    return data.map((row) => {
-      const costPrice = Number(row.cost_price ?? (row as Record<string, unknown>).costPrice ?? 0);
-      const clientPrice = Number(row.client_price ?? (row as Record<string, unknown>).clientPrice ?? (row as Record<string, unknown>).price ?? 0);
-      return {
-        id: row.id,
-        category: (row.category || 'other') as MaterialCategory,
-        name: row.name || 'Без названия',
-        unit: (row.unit || 'm2') as UnitType,
-        costPrice,
-        clientPrice,
-        price: clientPrice,
-        cost_price: costPrice,
-        client_price: clientPrice,
-      };
-    });
-  } catch (err) {
-    console.error('Исключение при получении materials_catalog:', err);
-    return DEFAULT_MATERIALS;
+  // 1. Проверяем кэш в памяти
+  if (!forceRefresh && inMemoryMaterialsCache && Date.now() - inMemoryMaterialsCache.timestamp < CACHE_TTL_MS) {
+    return inMemoryMaterialsCache.data;
   }
+
+  // 2. Проверяем кэш в LocalStorage
+  if (!forceRefresh) {
+    const lsCached = loadFromStorage<CatalogMaterialItem[]>(LS_MATERIALS_CACHE_KEY);
+    if (lsCached) {
+      inMemoryMaterialsCache = lsCached;
+      return lsCached.data;
+    }
+  }
+
+  // 3. Дедупликация параллельных запросов
+  if (materialsInFlightPromise) {
+    return materialsInFlightPromise;
+  }
+
+  materialsInFlightPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('materials_catalog')
+        .select('id, category, name, unit, cost_price, client_price')
+        .order('category', { ascending: true });
+
+      if (error) {
+        console.warn('Ошибка загрузки materials_catalog из Supabase, используем шаблонные цены:', error.message);
+        return DEFAULT_MATERIALS;
+      }
+
+      if (!data || data.length === 0) {
+        return DEFAULT_MATERIALS;
+      }
+
+      const mapped: CatalogMaterialItem[] = data.map((row) => {
+        const costPrice = Number(row.cost_price ?? (row as Record<string, unknown>).costPrice ?? 0);
+        const clientPrice = Number(row.client_price ?? (row as Record<string, unknown>).clientPrice ?? (row as Record<string, unknown>).price ?? 0);
+        return {
+          id: row.id,
+          category: (row.category || 'other') as MaterialCategory,
+          name: row.name || 'Без названия',
+          unit: (row.unit || 'm2') as UnitType,
+          costPrice,
+          clientPrice,
+          price: clientPrice,
+          cost_price: costPrice,
+          client_price: clientPrice,
+        };
+      });
+
+      inMemoryMaterialsCache = { data: mapped, timestamp: Date.now() };
+      saveToStorage(LS_MATERIALS_CACHE_KEY, mapped);
+      return mapped;
+    } catch (err) {
+      console.error('Исключение при получении materials_catalog:', err);
+      return DEFAULT_MATERIALS;
+    } finally {
+      materialsInFlightPromise = null;
+    }
+  })();
+
+  return materialsInFlightPromise;
 }
 
 /**
@@ -340,7 +436,7 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
       return DEFAULT_MATERIALS;
     }
 
-    return data.map((row) => {
+    const mapped = data.map((row) => {
       const costPrice = Number(row.cost_price ?? (row as Record<string, unknown>).costPrice ?? 0);
       const clientPrice = Number(row.client_price ?? (row as Record<string, unknown>).clientPrice ?? (row as Record<string, unknown>).price ?? 0);
       return {
@@ -355,6 +451,11 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
         client_price: clientPrice,
       };
     });
+
+    invalidateCatalogCache();
+    inMemoryMaterialsCache = { data: mapped, timestamp: Date.now() };
+    saveToStorage(LS_MATERIALS_CACHE_KEY, mapped);
+    return mapped;
   } catch (err) {
     console.error('Исключение при заполнении каталога:', err);
     return DEFAULT_MATERIALS;
@@ -362,31 +463,62 @@ export async function seedDefaultCatalogIfEmpty(): Promise<CatalogMaterialItem[]
 }
 
 /**
- * Загрузка актуального каталога работ из Supabase (с fallback на DEFAULT_WORKS)
+ * Загрузка актуального каталога работ из Supabase с кэшированием
  */
-export async function fetchWorksCatalog(): Promise<CatalogWorkItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from('works_catalog')
-      .select('id, category, name, unit, cost_price, client_price')
-      .order('category', { ascending: true });
+export async function fetchWorksCatalog(options?: { forceRefresh?: boolean }): Promise<CatalogWorkItem[]> {
+  const forceRefresh = options?.forceRefresh ?? false;
 
-    if (error || !data || data.length === 0) {
-      return DEFAULT_WORKS;
-    }
-
-    return data.map((row) => ({
-      id: row.id,
-      category: (row.category || 'additional') as WorkCategory,
-      name: row.name || 'Без названия',
-      unit: (row.unit || 'm2') as UnitType,
-      costPrice: Number(row.cost_price) || 0,
-      clientPrice: Number(row.client_price) || 0,
-    }));
-  } catch (err) {
-    console.warn('Исключение при получении works_catalog, используем дефолтные работы:', err);
-    return DEFAULT_WORKS;
+  // 1. Проверяем кэш в памяти
+  if (!forceRefresh && inMemoryWorksCache && Date.now() - inMemoryWorksCache.timestamp < CACHE_TTL_MS) {
+    return inMemoryWorksCache.data;
   }
+
+  // 2. Проверяем кэш в LocalStorage
+  if (!forceRefresh) {
+    const lsCached = loadFromStorage<CatalogWorkItem[]>(LS_WORKS_CACHE_KEY);
+    if (lsCached) {
+      inMemoryWorksCache = lsCached;
+      return lsCached.data;
+    }
+  }
+
+  // 3. Дедупликация параллельных запросов
+  if (worksInFlightPromise) {
+    return worksInFlightPromise;
+  }
+
+  worksInFlightPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('works_catalog')
+        .select('id, category, name, unit, cost_price, client_price')
+        .order('category', { ascending: true });
+
+      if (error || !data || data.length === 0) {
+        return DEFAULT_WORKS;
+      }
+
+      const mapped: CatalogWorkItem[] = data.map((row) => ({
+        id: row.id,
+        category: (row.category || 'additional') as WorkCategory,
+        name: row.name || 'Без названия',
+        unit: (row.unit || 'm2') as UnitType,
+        costPrice: Number(row.cost_price) || 0,
+        clientPrice: Number(row.client_price) || 0,
+      }));
+
+      inMemoryWorksCache = { data: mapped, timestamp: Date.now() };
+      saveToStorage(LS_WORKS_CACHE_KEY, mapped);
+      return mapped;
+    } catch (err) {
+      console.warn('Исключение при получении works_catalog, используем дефолтные работы:', err);
+      return DEFAULT_WORKS;
+    } finally {
+      worksInFlightPromise = null;
+    }
+  })();
+
+  return worksInFlightPromise;
 }
 
 /**
@@ -417,6 +549,8 @@ export async function saveWorkItemToSupabase(
       return { success: false, error: error?.message || 'Не удалось сохранить позицию' };
     }
 
+    invalidateCatalogCache();
+
     const saved: CatalogWorkItem = {
       id: data.id,
       category: data.category as WorkCategory,
@@ -446,6 +580,7 @@ export async function deleteWorkItemFromSupabase(
     if (error) {
       return { success: false, error: error.message };
     }
+    invalidateCatalogCache();
     return { success: true };
   } catch (err) {
     return {
@@ -483,6 +618,8 @@ export async function saveCatalogItemToSupabase(
       return { success: false, error: error?.message || 'Не удалось сохранить позицию' };
     }
 
+    invalidateCatalogCache();
+
     const costPrice = Number(data.cost_price ?? item.costPrice ?? 0);
     const clientPrice = Number(data.client_price ?? item.clientPrice ?? item.price ?? 0);
     const saved: CatalogMaterialItem = {
@@ -517,6 +654,7 @@ export async function deleteCatalogItemFromSupabase(
     if (error) {
       return { success: false, error: error.message };
     }
+    invalidateCatalogCache();
     return { success: true };
   } catch (err) {
     return {
@@ -536,6 +674,7 @@ export async function syncAllCatalogFromTemplate(): Promise<{
   error?: string;
 }> {
   try {
+    invalidateCatalogCache();
     // 1. Обновляем materials_catalog
     const { data: existingMaterials } = await supabase.from('materials_catalog').select('id');
     if (existingMaterials && existingMaterials.length > 0) {

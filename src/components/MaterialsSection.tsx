@@ -60,6 +60,181 @@ const formatUnit = (unit: UnitType): string => {
   }
 };
 
+interface MaterialRowItemProps {
+  item: MaterialItem;
+  index: number;
+  isDropdownOpen: boolean;
+  onUpdateItem: (id: string, fields: Partial<MaterialItem>) => void;
+  onDeleteItem: (id: string) => void;
+  onOpenDropdown: (id: string, triggerEl: HTMLElement | null) => void;
+  onCloseDropdown: () => void;
+}
+
+const MaterialRowItem = React.memo<MaterialRowItemProps>(({
+  item,
+  index,
+  isDropdownOpen,
+  onUpdateItem,
+  onDeleteItem,
+  onOpenDropdown,
+  onCloseDropdown,
+}) => {
+  const subCost = (Number(item.costPrice) || 0) * (Number(item.quantity) || 0);
+  const currentClientPrice = Number(item.clientPrice ?? item.price) || 0;
+  const subClient = currentClientPrice * (Number(item.quantity) || 0);
+  const subMargin = subClient - subCost;
+
+  return (
+    <tr className="hover:bg-blue-50/30 transition-colors group">
+      <td className="py-2.5 px-4 text-center text-slate-600 font-mono text-[11px]">
+        {index + 1}
+      </td>
+      <td className="py-2.5 px-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 select-none">
+              {CATEGORY_NAMES[item.category] || item.category}
+            </span>
+          </div>
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              value={item.name}
+              onChange={(e) => {
+                onUpdateItem(item.id, { name: e.target.value });
+                onOpenDropdown(item.id, e.currentTarget);
+              }}
+              onFocus={(e) => onOpenDropdown(item.id, e.currentTarget)}
+              onClick={(e) => onOpenDropdown(item.id, e.currentTarget)}
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 pr-6 cursor-text"
+              placeholder="Название материала (кликните для выбора из каталога)..."
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isDropdownOpen) {
+                  onCloseDropdown();
+                } else {
+                  onOpenDropdown(item.id, e.currentTarget.parentElement);
+                }
+              }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 p-1 rounded cursor-pointer transition"
+              title="Выбрать материал из базы данных"
+            >
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                  isDropdownOpen ? 'rotate-180 text-blue-600' : ''
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </td>
+
+      {/* Ед. измерения */}
+      <td className="py-2.5 px-3 text-center">
+        <select
+          value={item.unit}
+          onChange={(e) =>
+            onUpdateItem(item.id, {
+              unit: e.target.value as UnitType,
+            })
+          }
+          className="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none cursor-pointer"
+        >
+          <option value="m2">м² (кв. м)</option>
+          <option value="m">м (пог. м)</option>
+          <option value="pcs">шт (штуки)</option>
+          <option value="pack">упак. (упаковка)</option>
+        </select>
+        {item.category === 'profile' && item.unit === 'pcs' && (
+          <span className="block text-[10px] text-purple-600 font-medium mt-0.5">
+            хлыст 2.0 м
+          </span>
+        )}
+      </td>
+
+      {/* Количество */}
+      <td className="py-2.5 px-3 text-right">
+        <input
+          type="number"
+          value={item.quantity}
+          onChange={(e) =>
+            onUpdateItem(item.id, {
+              quantity: Math.max(0, Number(e.target.value) || 0),
+            })
+          }
+          className="w-24 text-right font-mono font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+          min={0}
+          step={item.unit === 'pcs' ? 1 : 0.1}
+        />
+      </td>
+
+      {/* Себестоимость (закупочная цена) */}
+      <td className="py-2.5 px-3 text-right">
+        <div className="relative">
+          <input
+            type="number"
+            value={item.costPrice}
+            onChange={(e) =>
+              onUpdateItem(item.id, {
+                costPrice: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+            className="w-28 text-right font-mono text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+            min={0}
+            title="Себестоимость / закупочная цена за ед."
+          />
+        </div>
+      </td>
+
+      {/* Цена клиенту (розничная цена) */}
+      <td className="py-2.5 px-3 text-right">
+        <div className="relative">
+          <input
+            type="number"
+            value={item.clientPrice ?? item.price ?? 0}
+            onChange={(e) => {
+              const newPrice = Math.max(0, Number(e.target.value) || 0);
+              onUpdateItem(item.id, {
+                clientPrice: newPrice,
+                price: newPrice,
+              });
+            }}
+            className="w-28 text-right font-mono font-bold text-blue-700 bg-blue-50/50 border border-blue-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+            min={0}
+            title="Цена клиенту / розничная цена за ед."
+          />
+        </div>
+      </td>
+
+      {/* Сумма клиенту */}
+      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+        {subClient.toLocaleString('ru-RU')} ₽
+      </td>
+
+      {/* Маржа */}
+      <td className="py-2.5 px-3 text-right font-mono font-semibold text-emerald-700">
+        +{subMargin.toLocaleString('ru-RU')} ₽
+      </td>
+
+      {/* Удалить */}
+      <td className="py-2.5 px-3 text-center">
+        <button
+          onClick={() => onDeleteItem(item.id)}
+          className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
+          title="Удалить материал"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+});
+
 const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   materials,
   onUpdateMaterials,
@@ -112,17 +287,26 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   // Индикатор обратной связи при ручном заполнении по геометрии
   const [syncFeedback, setSyncFeedback] = useState(false);
 
+  const materialsRef = useRef(materials);
+  useEffect(() => {
+    materialsRef.current = materials;
+  }, [materials]);
+
   const handleUpdateItem = useCallback((id: string, fields: Partial<MaterialItem>) => {
-    const updated = materials.map((item) => {
+    const updated = materialsRef.current.map((item) => {
       if (item.id !== id) return item;
       return { ...item, ...fields };
     });
     onUpdateMaterials(updated);
-  }, [materials, onUpdateMaterials]);
+  }, [onUpdateMaterials]);
 
   const handleDeleteItem = useCallback((id: string) => {
-    onUpdateMaterials(materials.filter((m) => m.id !== id));
-  }, [materials, onUpdateMaterials]);
+    onUpdateMaterials(materialsRef.current.filter((m) => m.id !== id));
+  }, [onUpdateMaterials]);
+
+  const handleCloseMaterialDropdown = useCallback(() => {
+    setOpenMaterialDropdownId(null);
+  }, []);
 
   const handleAddItem = useCallback((category: MaterialCategory = 'fabric') => {
     const matchingCatalog = catalogPool.find((c) => c.category === category);
@@ -233,7 +417,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   const handleSelectCatalogItemForLine = useCallback(
     (lineId: string, catItem: CatalogMaterialItem) => {
       const { costPrice, clientPrice, price } = extractCatalogPrices(catItem);
-      const updated = materials.map((item) => {
+      const updated = materialsRef.current.map((item) => {
         if (item.id !== lineId) return item;
         return {
           ...item,
@@ -253,7 +437,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
       onUpdateMaterials(updated);
       setOpenMaterialDropdownId(null);
     },
-    [materials, onUpdateMaterials]
+    [onUpdateMaterials]
   );
 
   // Закрытие меню категорий кнопки добавления при клике вне его или нажатии Escape
@@ -660,162 +844,18 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
                 </td>
               </tr>
             ) : (
-              filteredMaterials.map((item, index) => {
-                const subCost = (Number(item.costPrice) || 0) * (Number(item.quantity) || 0);
-                const currentClientPrice = Number(item.clientPrice ?? item.price) || 0;
-                const subClient = currentClientPrice * (Number(item.quantity) || 0);
-                const subMargin = subClient - subCost;
-
-                return (
-                  <tr key={item.id} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="py-2.5 px-4 text-center text-slate-600 font-mono text-[11px]">
-                      {index + 1}
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 select-none">
-                            {CATEGORY_NAMES[item.category] || item.category}
-                          </span>
-                        </div>
-                        <div className="relative flex items-center">
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => {
-                              handleUpdateItem(item.id, { name: e.target.value });
-                              openMaterialDropdownForLine(item.id, e.currentTarget);
-                            }}
-                            onFocus={(e) => openMaterialDropdownForLine(item.id, e.currentTarget)}
-                            onClick={(e) => openMaterialDropdownForLine(item.id, e.currentTarget)}
-                            autoComplete="off"
-                            spellCheck={false}
-                            className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 pr-6 cursor-text"
-                            placeholder="Название материала (кликните для выбора из каталога)..."
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (openMaterialDropdownId === item.id) {
-                                setOpenMaterialDropdownId(null);
-                              } else {
-                                openMaterialDropdownForLine(item.id, e.currentTarget.parentElement);
-                              }
-                            }}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 p-1 rounded cursor-pointer transition"
-                            title="Выбрать материал из базы данных"
-                          >
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 transition-transform duration-150 ${
-                                openMaterialDropdownId === item.id ? 'rotate-180 text-blue-600' : ''
-                              }`}
-                            />
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Ед. измерения */}
-                    <td className="py-2.5 px-3 text-center">
-                      <select
-                        value={item.unit}
-                        onChange={(e) =>
-                          handleUpdateItem(item.id, {
-                            unit: e.target.value as UnitType,
-                          })
-                        }
-                        className="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none cursor-pointer"
-                      >
-                        <option value="m2">м² (кв. м)</option>
-                        <option value="m">м (пог. м)</option>
-                        <option value="pcs">шт (штуки)</option>
-                        <option value="pack">упак. (упаковка)</option>
-                      </select>
-                      {item.category === 'profile' && item.unit === 'pcs' && (
-                        <span className="block text-[10px] text-purple-600 font-medium mt-0.5">
-                          хлыст 2.0 м
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Количество */}
-                    <td className="py-2.5 px-3 text-right">
-                      <input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          handleUpdateItem(item.id, {
-                            quantity: Math.max(0, Number(e.target.value) || 0),
-                          })
-                        }
-                        className="w-24 text-right font-mono font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-                        min={0}
-                        step={item.unit === 'pcs' ? 1 : 0.1}
-                      />
-                    </td>
-
-                    {/* Себестоимость (закупочная цена) */}
-                    <td className="py-2.5 px-3 text-right">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={item.costPrice}
-                          onChange={(e) =>
-                            handleUpdateItem(item.id, {
-                              costPrice: Math.max(0, Number(e.target.value) || 0),
-                            })
-                          }
-                          className="w-28 text-right font-mono text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-                          min={0}
-                          title="Себестоимость / закупочная цена за ед."
-                        />
-                      </div>
-                    </td>
-
-                    {/* Цена клиенту (розничная цена) */}
-                    <td className="py-2.5 px-3 text-right">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={item.clientPrice ?? item.price ?? 0}
-                          onChange={(e) => {
-                            const newPrice = Math.max(0, Number(e.target.value) || 0);
-                            handleUpdateItem(item.id, {
-                              clientPrice: newPrice,
-                              price: newPrice,
-                            });
-                          }}
-                          className="w-28 text-right font-mono font-bold text-blue-700 bg-blue-50/50 border border-blue-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-                          min={0}
-                          title="Цена клиенту / розничная цена за ед."
-                        />
-                      </div>
-                    </td>
-
-                    {/* Сумма клиенту */}
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                      {subClient.toLocaleString('ru-RU')} ₽
-                    </td>
-
-                    {/* Маржа */}
-                    <td className="py-2.5 px-3 text-right font-mono font-semibold text-emerald-700">
-                      +{subMargin.toLocaleString('ru-RU')} ₽
-                    </td>
-
-                    {/* Удалить */}
-                    <td className="py-2.5 px-3 text-center">
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
-                        title="Удалить материал"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+              filteredMaterials.map((item, index) => (
+                <MaterialRowItem
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  isDropdownOpen={openMaterialDropdownId === item.id}
+                  onUpdateItem={handleUpdateItem}
+                  onDeleteItem={handleDeleteItem}
+                  onOpenDropdown={openMaterialDropdownForLine}
+                  onCloseDropdown={handleCloseMaterialDropdown}
+                />
+              ))
             )}
           </tbody>
         </table>

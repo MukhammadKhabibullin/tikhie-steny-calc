@@ -291,34 +291,45 @@ export function App() {
     }
 
     let updatedCount = 0;
-    const updatedMaterials = materials.map((mat) => {
-      const matched = catalog.find(
-        (c) =>
-          (mat.catalogId && c.id === mat.catalogId) ||
-          c.name.trim().toLowerCase() === mat.name.trim().toLowerCase()
-      );
-      if (matched) {
-        updatedCount++;
-        const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
-        return {
-          ...mat,
-          catalogId: matched.id,
-          costPrice,
-          clientPrice,
-          price,
-          unit: matched.unit,
-        };
-      }
-      return mat;
+    setMaterials((prevMaterials) => {
+      const next = prevMaterials.map((mat) => {
+        const matched = catalog.find(
+          (c) =>
+            (mat.catalogId && c.id === mat.catalogId) ||
+            c.name.trim().toLowerCase() === mat.name.trim().toLowerCase()
+        );
+        if (matched) {
+          updatedCount++;
+          const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
+          return {
+            ...mat,
+            catalogId: matched.id,
+            costPrice,
+            clientPrice,
+            price,
+            unit: matched.unit,
+          };
+        }
+        return mat;
+      });
+      return next;
     });
 
-    setMaterials(updatedMaterials);
     setNotification({
       type: 'success',
       message: `Цены успешно синхронизированы с каталогом Supabase (${updatedCount} поз. обновлено)!`,
     });
     setTimeout(() => setNotification(null), 4000);
-  }, [catalog, materials]);
+  }, [catalog]);
+
+  const handleOpenProjectsModal = useCallback(() => setIsProjectsModalOpen(true), []);
+  const handleOpenCatalogModal = useCallback(() => setIsCatalogModalOpen(true), []);
+  const handleOpenCompanyModal = useCallback(() => {
+    setIsFirstSetupModal(false);
+    setIsCompanyModalOpen(true);
+  }, []);
+  const handleResumeProject = useCallback(() => setCurrentView('editor'), []);
+  const handleNavigateToDashboard = useCallback(() => setCurrentView('dashboard'), []);
 
   // Добавление позиции из каталога напрямую в проект
   const handleAddCatalogItemToProject = useCallback((catItem: CatalogMaterialItem) => {
@@ -593,13 +604,10 @@ export function App() {
           hasActiveProject={Boolean(project.title || project.clientName || rooms.length > 0)}
           activeProjectTitle={project.title || project.clientName || 'Новый расчет'}
           onCreateNewProject={handleNewProject}
-          onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
-          onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
-          onOpenCompanyModal={() => {
-            setIsFirstSetupModal(false);
-            setIsCompanyModalOpen(true);
-          }}
-          onResumeProject={() => setCurrentView('editor')}
+          onOpenProjectsModal={handleOpenProjectsModal}
+          onOpenCatalogModal={handleOpenCatalogModal}
+          onOpenCompanyModal={handleOpenCompanyModal}
+          onResumeProject={handleResumeProject}
           onLogout={handleLogout}
         />
       ) : (
@@ -615,14 +623,11 @@ export function App() {
             lastSavedAt={lastSavedAt}
             organization={organization}
             userEmail={currentUser?.email}
-            onOpenProjectsModal={() => setIsProjectsModalOpen(true)}
-            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
-            onOpenCompanyModal={() => {
-              setIsFirstSetupModal(false);
-              setIsCompanyModalOpen(true);
-            }}
+            onOpenProjectsModal={handleOpenProjectsModal}
+            onOpenCatalogModal={handleOpenCatalogModal}
+            onOpenCompanyModal={handleOpenCompanyModal}
             onNewProject={handleNewProject}
-            onNavigateToDashboard={() => setCurrentView('dashboard')}
+            onNavigateToDashboard={handleNavigateToDashboard}
             onLogout={handleLogout}
           />
 
@@ -664,7 +669,7 @@ export function App() {
                 calculatedProfileLength={totalProfileLength}
                 calculatedPlinthLength={totalPlinthLength}
                 catalog={catalog}
-                onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
+                onOpenCatalogModal={handleOpenCatalogModal}
                 onSyncPricesWithCatalog={handleSyncPricesWithCatalog}
                 onAddCatalogItem={handleAddCatalogItemToProject}
               />
