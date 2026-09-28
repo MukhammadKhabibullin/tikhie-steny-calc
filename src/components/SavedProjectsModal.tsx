@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { Project, Room } from '../types';
+import type { Project, Room, MaterialItem, WorkItem } from '../types';
 import {
   fetchSavedProjects,
   fetchProjectRoomsWithWalls,
@@ -21,7 +21,7 @@ import {
 interface SavedProjectsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectProject: (project: Project, rooms: Room[]) => void;
+  onSelectProject: (project: Project, rooms: Room[], materials: MaterialItem[], works: WorkItem[]) => void;
 }
 
 export const SavedProjectsModal: React.FC<SavedProjectsModalProps> = ({
@@ -73,8 +73,8 @@ export const SavedProjectsModal: React.FC<SavedProjectsModalProps> = ({
   const handleSelect = async (project: Project) => {
     setLoadingProjectId(project.id);
     try {
-      const rooms = await fetchProjectRoomsWithWalls(project.id);
-      onSelectProject(project, rooms);
+      const data = await fetchProjectRoomsWithWalls(project.id);
+      onSelectProject(project, data.rooms, data.materials, data.works);
       onClose();
     } catch (err: unknown) {
       alert('Ошибка при загрузке данных проекта: ' + (err instanceof Error ? err.message : String(err)));

@@ -140,3 +140,9 @@ export interface RoomCalculationResult {
   profileLengthWithReserve: number; // м
   plinthLengthWithReserve?: number; // м
 }
+
+export interface SavedProjectData {
+  rooms: Room[];
+  materials: MaterialItem[];
+  works: WorkItem[];
+}

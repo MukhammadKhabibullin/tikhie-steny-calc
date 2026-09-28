@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Project, Room, MaterialItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
+import type { Project, Room, MaterialItem, WorkItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
 import {
   calculateProjectTotals,
   calculateRoomMetrics,
@@ -7,8 +7,9 @@ import {
   syncMaterialsWithGeometry,
   calculateProfilePieces,
   extractCatalogPrices,
+  findMatchingCatalogMaterial,
 } from './utils/calculator';
-import { DEFAULT_WORKS } from './data/prices';
+import { DEFAULT_MATERIALS, DEFAULT_WORKS } from './data/prices';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
@@ -53,50 +54,36 @@ const INITIAL_PROJECT: Project = {
 
 const INITIAL_ROOMS: Room[] = [];
 
-// Актуальные стартовые позиции по шаблону «Тихие Стены» 2026
-const INITIAL_MATERIALS: MaterialItem[] = [
-  {
-    id: crypto.randomUUID(),
-    category: 'fabric',
-    name: 'ТС КОМФОРТ (3,25м) Россия, 260г/м2',
-    unit: 'm2',
-    costPrice: 1100,
-    clientPrice: 1750,
-    price: 1750,
-    quantity: 0,
-  },
-  {
-    id: crypto.randomUUID(),
-    category: 'profile',
-    name: 'Профиль ТС Базовый, черный/белый (2,0м)',
-    unit: 'm',
-    costPrice: 338,
-    clientPrice: 450,
-    price: 450,
-    quantity: 0,
-    profileUnitMode: 'm',
-  },
-  {
-    id: crypto.randomUUID(),
-    category: 'insulation',
-    name: 'Акустическая мембрана 10мм (1,05м) 250г/м2',
-    unit: 'm2',
-    costPrice: 400,
-    clientPrice: 600,
-    price: 600,
-    quantity: 0,
-  },
-  {
-    id: crypto.randomUUID(),
-    category: 'plinth',
-    name: 'Плинтус ТС Теневой Мини 15мм, черный (2,0м)',
-    unit: 'm',
-    costPrice: 600,
-    clientPrice: 800,
-    price: 800,
-    quantity: 0,
-  },
-];
+const INITIAL_MATERIAL_CATALOG_IDS = [
+  'e813c430-0363-5897-9f29-65749a8b58c2',
+  '506b21d0-7244-518e-a583-856431a42724',
+  '5eba4106-4f8d-5a9f-a5b3-a1359dedb952',
+  '15423a83-a55c-52fc-9d35-82f874004d12',
+] as const;
+
+// Starter items are derived from the same canonical price list as the catalog.
+const createInitialMaterials = (): MaterialItem[] =>
+  INITIAL_MATERIAL_CATALOG_IDS.map((catalogId) => {
+    const item = DEFAULT_MATERIALS.find((candidate) => candidate.id === catalogId);
+    if (!item) {
+      throw new Error(`Не найдена стартовая позиция каталога: ${catalogId}`);
+    }
+
+    return {
+      id: crypto.randomUUID(),
+      catalogId: item.id,
+      category: item.category,
+      name: item.name,
+      unit: item.unit,
+      costPrice: item.costPrice,
+      clientPrice: item.clientPrice,
+      price: item.clientPrice,
+      quantity: 0,
+      ...(item.category === 'profile' ? { profileUnitMode: 'm' as const } : {}),
+    };
+  });
+
+const INITIAL_MATERIALS = createInitialMaterials();
 
 
 export function App() {
@@ -116,6 +103,7 @@ export function App() {
   const [project, setProject] = useState<Project>(INITIAL_PROJECT);
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [materials, setMaterials] = useState<MaterialItem[]>(INITIAL_MATERIALS);
+  const [works, setWorks] = useState<WorkItem[]>([]);
 
   // Состояние сохранения в Supabase
   const [isSaving, setIsSaving] = useState(false);
@@ -201,12 +189,7 @@ export function App() {
           // Синхронизируем закупочные и клиентские цены стартовых позиций с базой Supabase
           setMaterials((prevMaterials) =>
             prevMaterials.map((mat) => {
-              const matched = items.find(
-                (c) =>
-                  (mat.catalogId && c.id === mat.catalogId) ||
-                  c.name.trim().toLowerCase() === mat.name.trim().toLowerCase() ||
-                  c.category === mat.category
-              );
+              const matched = findMatchingCatalogMaterial(mat, items);
               if (matched) {
                 const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
                 return {
@@ -270,8 +253,8 @@ export function App() {
   // Перезагрузка каталога из Supabase
   const handleRefreshCatalog = useCallback(async () => {
     const [items, works] = await Promise.all([
-      fetchMaterialsCatalog(),
-      fetchWorksCatalog(),
+      fetchMaterialsCatalog({ forceRefresh: true }),
+      fetchWorksCatalog({ forceRefresh: true }),
     ]);
     setCatalog(items);
     if (works && works.length > 0) {
@@ -293,11 +276,7 @@ export function App() {
     let updatedCount = 0;
     setMaterials((prevMaterials) => {
       const next = prevMaterials.map((mat) => {
-        const matched = catalog.find(
-          (c) =>
-            (mat.catalogId && c.id === mat.catalogId) ||
-            c.name.trim().toLowerCase() === mat.name.trim().toLowerCase()
-        );
+        const matched = findMatchingCatalogMaterial(mat, catalog);
         if (matched) {
           updatedCount++;
           const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
@@ -374,7 +353,7 @@ export function App() {
         ...project,
         organizationId: organization?.id || project.organizationId || null,
       };
-      const result = await saveProjectToSupabase(projectToSave, rooms);
+      const result = await saveProjectToSupabase(projectToSave, rooms, materials, works);
       if (result.success && result.savedProject) {
         setProject(result.savedProject);
         if (result.savedRooms && result.savedRooms.length > 0) {
@@ -400,7 +379,7 @@ export function App() {
     } finally {
       setIsSaving(false);
     }
-  }, [project, organization, rooms]);
+  }, [project, organization, rooms, materials, works]);
 
   // Экспорт коммерческого предложения в буфер обмена
   const handleExportEstimate = useCallback(() => {
@@ -480,21 +459,12 @@ export function App() {
   }, [project, rooms, materials, totals, organization]);
 
   // Загрузка сохраненного проекта из Supabase и переход в редактор
-  const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[]) => {
+  const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[], loadedMaterials: MaterialItem[], loadedWorks: WorkItem[]) => {
     setProject(loadedProject);
+    setMaterials(loadedMaterials.length > 0 ? loadedMaterials : createInitialMaterials());
+    setWorks(loadedWorks);
     if (loadedRooms && loadedRooms.length > 0) {
       setRooms(loadedRooms);
-      const { totalFabricArea, totalProfileLength, totalPlinthLength } = calculateTotalRoomMetrics(loadedRooms);
-      if (totalFabricArea > 0 || totalProfileLength > 0) {
-        setMaterials((prevMaterials) =>
-          syncMaterialsWithGeometry(
-            prevMaterials,
-            totalFabricArea,
-            totalProfileLength,
-            totalPlinthLength
-          )
-        );
-      }
     }
     setLastSavedAt(new Date().toISOString());
     setCurrentView('editor');
@@ -523,19 +493,16 @@ export function App() {
       createdAt: new Date().toISOString(),
     });
     setRooms([]);
+    setWorks([]);
     setMaterials(
-      INITIAL_MATERIALS.map((m) => {
-        const matched = catalog.find(
-          (c) =>
-            c.name.trim().toLowerCase() === m.name.trim().toLowerCase() ||
-            c.category === m.category
-        );
+      createInitialMaterials().map((m) => {
+        const matched = findMatchingCatalogMaterial(m, catalog);
         return {
           ...m,
-          id: crypto.randomUUID(),
-          catalogId: matched?.id,
+          catalogId: matched?.id ?? m.catalogId,
           costPrice: matched ? matched.costPrice : m.costPrice,
           clientPrice: matched ? matched.clientPrice : m.clientPrice,
+          price: matched ? matched.clientPrice : m.clientPrice,
           quantity: 0,
         };
       })

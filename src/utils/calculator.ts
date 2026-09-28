@@ -226,6 +226,31 @@ export const extractCatalogPrices = (
 };
 
 /**
+ * Normalizes a catalog name for reliable exact matching.
+ * Category-only matching is intentionally prohibited because a category can
+ * contain multiple items with different prices.
+ */
+export const normalizeCatalogName = (name: string): string => {
+  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
+};
+
+/**
+ * Finds the exact catalog item by stable id first and normalized name second.
+ */
+export const findMatchingCatalogMaterial = (
+  material: Pick<MaterialItem, 'catalogId' | 'name'>,
+  catalog: CatalogMaterialItem[]
+): CatalogMaterialItem | undefined => {
+  if (material.catalogId) {
+    const byId = catalog.find((item) => item.id === material.catalogId);
+    if (byId) return byId;
+  }
+
+  const normalizedName = normalizeCatalogName(material.name);
+  return catalog.find((item) => normalizeCatalogName(item.name) === normalizedName);
+};
+
+/**
  * Расчет себестоимости материалов (руб)
  */
 export const calculateMaterialsCostPrice = (materials: MaterialItem[]): number => {

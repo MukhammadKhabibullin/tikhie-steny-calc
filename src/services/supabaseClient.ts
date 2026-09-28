@@ -10,7 +10,9 @@ import type {
   MaterialCategory,
   WorkCategory,
   UnitType,
-  Organization
+  Organization,
+  MaterialItem,
+  WorkItem,
 } from '../types';
 import { DEFAULT_MATERIALS, DEFAULT_WORKS } from '../data/prices';
 
@@ -54,7 +56,9 @@ export interface SaveProjectResult {
  */
 export async function saveProjectToSupabase(
   project: Project,
-  rooms: Room[]
+  rooms: Room[],
+  materials: MaterialItem[] = [],
+  works: WorkItem[] = []
 ): Promise<SaveProjectResult> {
   try {
     const projectId = ensureUUID(project.id);
@@ -153,6 +157,38 @@ export async function saveProjectToSupabase(
           return { success: false, error: insertWallsError.message };
         }
       }
+
+      const openingsToInsert = preparedRooms.flatMap((r) => (r.openings || []).map((op) => ({
+        id: op.id,
+        room_id: r.id,
+        wall_id: op.wallId && preparedWallsForRoom(r).some((w) => w.id === op.wallId) ? op.wallId : null,
+        type: op.type,
+        width: Number(op.width) || 0,
+        height: Number(op.height) || 0,
+      })));
+      if (openingsToInsert.length > 0) {
+        const { error } = await supabase.from('openings').insert(openingsToInsert);
+        if (error) return { success: false, error: error.message };
+      }
+    }
+
+    await supabase.from('project_materials').delete().eq('project_id', projectId);
+    await supabase.from('project_works').delete().eq('project_id', projectId);
+    if (materials.length > 0) {
+      const { error } = await supabase.from('project_materials').insert(materials.map((m) => ({
+        id: ensureUUID(m.id), project_id: projectId, catalog_id: m.catalogId || null,
+        category: m.category, name: m.name, unit: m.unit, cost_price: m.costPrice,
+        client_price: m.clientPrice, quantity: m.quantity, profile_unit_mode: m.profileUnitMode || null,
+      })));
+      if (error) return { success: false, error: error.message };
+    }
+    if (works.length > 0) {
+      const { error } = await supabase.from('project_works').insert(works.map((w) => ({
+        id: ensureUUID(w.id), project_id: projectId, catalog_id: w.catalogId || null,
+        category: w.category, name: w.name, unit: w.unit, cost_price: w.costPrice,
+        client_price: w.clientPrice, quantity: w.quantity,
+      })));
+      if (error) return { success: false, error: error.message };
     }
 
     const updatedProject: Project = {
@@ -171,6 +207,10 @@ export async function saveProjectToSupabase(
     console.error('Исключение при сохранении в Supabase:', err);
     return { success: false, error: message };
   }
+}
+
+function preparedWallsForRoom(room: Room): Wall[] {
+  return room.walls || [];
 }
 
 /**
@@ -218,7 +258,7 @@ export async function fetchSavedProjects(organizationId?: string | null): Promis
 /**
  * Загрузка комнат и стен для конкретного проекта
  */
-export async function fetchProjectRoomsWithWalls(projectId: string): Promise<Room[]> {
+export async function fetchProjectRoomsWithWalls(projectId: string): Promise<{ rooms: Room[]; materials: MaterialItem[]; works: WorkItem[] }> {
   const { data: roomsData, error: roomsError } = await supabase
     .from('rooms')
     .select('id, name, ceiling_height')
@@ -226,7 +266,7 @@ export async function fetchProjectRoomsWithWalls(projectId: string): Promise<Roo
 
   if (roomsError || !roomsData) {
     console.error('Ошибка загрузки комнат:', roomsError);
-    return [];
+    return { rooms: [], materials: [], works: [] };
   }
 
   const roomIds = roomsData.map((r) => r.id);
@@ -249,13 +289,28 @@ export async function fetchProjectRoomsWithWalls(projectId: string): Promise<Roo
     return acc;
   }, {});
 
-  return roomsData.map((r) => ({
+  const { data: openingsData } = await supabase.from('openings').select('id, room_id, wall_id, type, width, height').in('room_id', roomIds);
+  const openingsByRoom = (openingsData || []).reduce<Record<string, Opening[]>>((acc, o) => {
+    (acc[o.room_id] ||= []).push({ id: o.id, wallId: o.wall_id || undefined, type: o.type as Opening['type'], width: Number(o.width) || 0, height: Number(o.height) || 0 });
+    return acc;
+  }, {});
+  const [{ data: materialRows }, { data: workRows }] = await Promise.all([
+    supabase.from('project_materials').select('*').eq('project_id', projectId),
+    supabase.from('project_works').select('*').eq('project_id', projectId),
+  ]);
+
+  const rooms = roomsData.map((r) => ({
     id: r.id,
     name: r.name,
     ceilingHeight: Number(r.ceiling_height) || 2700,
     walls: wallsByRoom[r.id] || [],
-    openings: [], // в БД нет таблицы openings
+    openings: openingsByRoom[r.id] || [],
   }));
+  return {
+    rooms,
+    materials: (materialRows || []).map((m) => ({ id: m.id, catalogId: m.catalog_id || undefined, category: m.category as MaterialCategory, name: m.name, unit: m.unit as UnitType, costPrice: Number(m.cost_price) || 0, clientPrice: Number(m.client_price) || 0, price: Number(m.client_price) || 0, quantity: Number(m.quantity) || 0, profileUnitMode: m.profile_unit_mode || undefined })),
+    works: (workRows || []).map((w) => ({ id: w.id, catalogId: w.catalog_id || undefined, category: w.category as WorkCategory, name: w.name, unit: w.unit as UnitType, costPrice: Number(w.cost_price) || 0, clientPrice: Number(w.client_price) || 0, quantity: Number(w.quantity) || 0 })),
+  };
 }
 
 /**
@@ -675,15 +730,7 @@ export async function syncAllCatalogFromTemplate(): Promise<{
 }> {
   try {
     invalidateCatalogCache();
-    // 1. Обновляем materials_catalog
-    const { data: existingMaterials } = await supabase.from('materials_catalog').select('id');
-    if (existingMaterials && existingMaterials.length > 0) {
-      await supabase
-        .from('materials_catalog')
-        .delete()
-        .in('id', existingMaterials.map((m) => m.id));
-    }
-
+    // Update canonical template rows by stable ids and preserve custom rows.
     const materialRows = DEFAULT_MATERIALS.map((m) => ({
       id: m.id,
       category: m.category,
@@ -693,38 +740,40 @@ export async function syncAllCatalogFromTemplate(): Promise<{
       client_price: m.clientPrice,
     }));
 
-    const { error: matErr } = await supabase.from('materials_catalog').insert(materialRows);
+    const { error: matErr } = await supabase
+      .from('materials_catalog')
+      .upsert(materialRows, { onConflict: 'id' });
     if (matErr) {
-      console.warn('Ошибка вставки materials_catalog при синхронизации:', matErr.message);
+      return {
+        success: false,
+        materialsCount: 0,
+        worksCount: 0,
+        error: matErr.message,
+      };
     }
 
-    // 2. Пытаемся обновить works_catalog (если таблица создана в Supabase)
+    // Update canonical work rows by stable ids and preserve custom rows.
     const worksCount = DEFAULT_WORKS.length;
-    try {
-      const { data: existingWorks } = await supabase.from('works_catalog').select('id');
-      if (existingWorks && existingWorks.length > 0) {
-        await supabase
-          .from('works_catalog')
-          .delete()
-          .in('id', existingWorks.map((w) => w.id));
-      }
+    const workRows = DEFAULT_WORKS.map((w, idx) => ({
+      id: w.id,
+      category: w.category,
+      name: w.name,
+      unit: w.unit,
+      cost_price: w.costPrice,
+      client_price: w.clientPrice,
+      sort_order: idx + 1,
+    }));
 
-      const workRows = DEFAULT_WORKS.map((w, idx) => ({
-        id: w.id,
-        category: w.category,
-        name: w.name,
-        unit: w.unit,
-        cost_price: w.costPrice,
-        client_price: w.clientPrice,
-        sort_order: idx + 1,
-      }));
-
-      const { error: workErr } = await supabase.from('works_catalog').insert(workRows);
-      if (workErr) {
-        console.warn('Таблица works_catalog еще не создана в Supabase:', workErr.message);
-      }
-    } catch {
-      // works_catalog might not exist yet
+    const { error: workErr } = await supabase
+      .from('works_catalog')
+      .upsert(workRows, { onConflict: 'id' });
+    if (workErr) {
+      return {
+        success: false,
+        materialsCount: DEFAULT_MATERIALS.length,
+        worksCount: 0,
+        error: workErr.message,
+      };
     }
 
     return {
@@ -1022,5 +1071,3 @@ export async function saveOrganization(
     };
   }
 }
-
-
