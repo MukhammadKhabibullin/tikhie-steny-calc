@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { CatalogMaterialItem, MaterialItem, MaterialCategory, UnitType } from '../types';
 import { DEFAULT_MATERIALS } from '../data/prices';
 import { calculateProfilePieces, extractCatalogPrices } from '../utils/calculator';
+import { fetchFabricStock, type FabricStockItem } from '../services/fabricStock';
 import {
   Search,
   X,
@@ -83,6 +84,31 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [recentlyAddedIds, setRecentlyAddedIds] = useState<Set<string>>(new Set());
   const [addedCount, setAddedCount] = useState(0);
+  const [fabricStock, setFabricStock] = useState<FabricStockItem[]>([]);
+  const [fabricStockLoading, setFabricStockLoading] = useState(false);
+  const [fabricStockError, setFabricStockError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || selectedCategory !== 'fabric') return;
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        setFabricStockLoading(true);
+        setFabricStockError(null);
+      }
+    });
+    fetchFabricStock(controller.signal)
+      .then(setFabricStock)
+      .catch((error: unknown) => {
+        if ((error as { name?: string })?.name !== 'AbortError') {
+          setFabricStockError('Не удалось загрузить наличие тканей');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFabricStockLoading(false);
+      });
+    return () => controller.abort();
+  }, [isOpen, selectedCategory]);
 
   // Блокировка прокрутки фона и закрытие по Escape
   useEffect(() => {
@@ -325,6 +351,30 @@ export const MaterialPickerModal: React.FC<MaterialPickerModalProps> = ({
               );
             })}
           </div>
+
+          {selectedCategory === 'fabric' && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div>
+                  <div className="text-xs font-bold text-emerald-900">Наличие тканей на складе</div>
+                  <div className="text-[10px] text-emerald-700">Ориентировочный доступный остаток, погонные метры</div>
+                </div>
+                {fabricStock.length > 0 && <span className="text-[10px] font-bold text-emerald-800">{fabricStock.length} поз.</span>}
+              </div>
+              {fabricStockLoading && <div className="text-xs text-emerald-700 py-2">Загрузка актуального списка…</div>}
+              {fabricStockError && <div className="text-xs text-amber-700 py-2">{fabricStockError}. Проверьте доступность сайта поставщика.</div>}
+              {!fabricStockLoading && !fabricStockError && fabricStock.length > 0 && (
+                <div className="max-h-44 overflow-y-auto rounded-lg border border-emerald-100 bg-white divide-y divide-slate-100">
+                  {fabricStock.map((stock) => (
+                    <div key={`${stock.name}-${stock.width}`} className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-[11px]">
+                      <span className="truncate text-slate-700" title={stock.name}>{stock.name}</span>
+                      <span className="shrink-0 font-mono text-emerald-700">{stock.available.toLocaleString('ru-RU')} м · {stock.width.toLocaleString('ru-RU')} м</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Содержимое: Список позиций каталога */}
