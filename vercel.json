@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/fabric-stock",
-      "destination": "https://tkansklad.ru/"
-    }
-  ]
-}
