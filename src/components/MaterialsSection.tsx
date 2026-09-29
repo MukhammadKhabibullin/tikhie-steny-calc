@@ -19,6 +19,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { MaterialPickerModal } from './MaterialPickerModal';
+import { fetchFabricStock, type FabricStockItem } from '../services/fabricStock';
 
 interface MaterialsSectionProps {
   materials: MaterialItem[];
@@ -261,6 +262,8 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 
   // Состояние выпадающего списка конкретных позиций базы данных в строке
   const [openMaterialDropdownId, setOpenMaterialDropdownId] = useState<string | null>(null);
+  const [fabricStock, setFabricStock] = useState<FabricStockItem[]>([]);
+  const [fabricStockLoading, setFabricStockLoading] = useState(false);
   const [materialDropdownCoords, setMaterialDropdownCoords] = useState<{
     top: number;
     left: number;
@@ -549,6 +552,24 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
     if (!openMaterialDropdownId) return null;
     return materials.find((m) => m.id === openMaterialDropdownId) || null;
   }, [materials, openMaterialDropdownId]);
+
+  useEffect(() => {
+    if (!activeMaterialRow || activeMaterialRow.category !== 'fabric') {
+      queueMicrotask(() => setFabricStock([]));
+      return;
+    }
+    const controller = new AbortController();
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) setFabricStockLoading(true);
+    });
+    fetchFabricStock(controller.signal)
+      .then(setFabricStock)
+      .catch(() => setFabricStock([]))
+      .finally(() => {
+        if (!controller.signal.aborted) setFabricStockLoading(false);
+      });
+    return () => controller.abort();
+  }, [activeMaterialRow]);
 
   const itemsForActiveCategory = useMemo(() => {
     if (!activeMaterialRow) return [];
@@ -959,6 +980,29 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
               </div>
               <span className="text-[10px] text-slate-400">Esc для закрытия</span>
             </div>
+
+            {activeMaterialRow.category === 'fabric' && (
+              <div className="border-b border-emerald-100 bg-emerald-50/70 px-3 py-2">
+                <div className="flex items-center justify-between text-[10px] font-bold text-emerald-900">
+                  <span>Наличие тканей на складе</span>
+                  {fabricStock.length > 0 && <span>{fabricStock.length} поз.</span>}
+                </div>
+                {fabricStockLoading ? (
+                  <div className="pt-1 text-[10px] text-emerald-700">Загрузка наличия…</div>
+                ) : (
+                  <div className="mt-1 max-h-28 overflow-y-auto rounded border border-emerald-100 bg-white divide-y divide-slate-100">
+                    {fabricStock.length === 0 ? (
+                      <div className="px-2 py-1.5 text-[10px] text-slate-500">Наличие временно недоступно</div>
+                    ) : fabricStock.map((stock) => (
+                      <div key={`${stock.name}-${stock.width}`} className="flex items-center justify-between gap-2 px-2 py-1 text-[10px]">
+                        <span className="truncate text-slate-700" title={stock.name}>{stock.name}</span>
+                        <span className="shrink-0 font-mono text-emerald-700">{stock.available.toLocaleString('ru-RU')} м</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Список позиций */}
             <div className="overflow-y-auto divide-y divide-slate-100 max-h-60 scrollbar-thin">
