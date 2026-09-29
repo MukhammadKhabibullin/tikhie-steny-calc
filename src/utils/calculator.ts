@@ -317,7 +317,8 @@ export const calculateProjectTotals = (
   profileReserveFactor: number = PROFILE_RESERVE_FACTOR,
   fabricReserveFactor: number = FABRIC_RESERVE_FACTOR,
   plinthReserveFactor: number = PLINTH_RESERVE_FACTOR,
-  overheadRate: { percent: number; minAmount: number } = OVERHEAD_RATE
+  overheadRate: { percent: number; minAmount: number } = OVERHEAD_RATE,
+  roomMetrics?: ReturnType<typeof calculateTotalRoomMetrics>
 ): CalculationResult => {
   const {
     totalFabricArea,
@@ -327,7 +328,7 @@ export const calculateProjectTotals = (
     totalNetWallArea,
     totalGrossWallArea,
     totalOpeningsArea,
-  } = calculateTotalRoomMetrics(rooms, profileReserveFactor, fabricReserveFactor, plinthReserveFactor);
+  } = roomMetrics ?? calculateTotalRoomMetrics(rooms, profileReserveFactor, fabricReserveFactor, plinthReserveFactor);
 
   const materialsCost = calculateMaterialsCostPrice(materials);
   const materialsClient = calculateMaterialsClientPrice(materials);

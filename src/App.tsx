@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback } from 'react';
 import type { Project, Room, MaterialItem, WorkItem, CatalogMaterialItem, CatalogWorkItem, Organization, AppView } from './types';
 import {
   calculateProjectTotals,
@@ -14,11 +14,11 @@ import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
 import { SummarySection } from './components/SummarySection';
-import { SavedProjectsModal } from './components/SavedProjectsModal';
-import { CatalogManagerModal } from './components/CatalogManagerModal';
-import { AuthScreen } from './components/AuthScreen';
-import { CompanyProfileModal } from './components/CompanyProfileModal';
-import { DashboardScreen } from './components/DashboardScreen';
+const SavedProjectsModal = lazy(() => import('./components/SavedProjectsModal').then((module) => ({ default: module.SavedProjectsModal })));
+const CatalogManagerModal = lazy(() => import('./components/CatalogManagerModal').then((module) => ({ default: module.CatalogManagerModal })));
+const AuthScreen = lazy(() => import('./components/AuthScreen').then((module) => ({ default: module.AuthScreen })));
+const CompanyProfileModal = lazy(() => import('./components/CompanyProfileModal').then((module) => ({ default: module.CompanyProfileModal })));
+const DashboardScreen = lazy(() => import('./components/DashboardScreen').then((module) => ({ default: module.DashboardScreen })));
 import {
   saveProjectToSupabase,
   fetchMaterialsCatalog,
@@ -84,6 +84,15 @@ const createInitialMaterials = (): MaterialItem[] =>
   });
 
 const INITIAL_MATERIALS = createInitialMaterials();
+
+const ScreenLoader = ({ label }: { label: string }) => (
+  <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3 text-slate-300">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <span className="text-sm font-medium">{label}</span>
+    </div>
+  </div>
+);
 
 
 export function App() {
@@ -219,10 +228,13 @@ export function App() {
     };
   }, []);
 
+  // Calculate room geometry once and reuse it for totals and material quantities.
+  const roomMetrics = useMemo(() => calculateTotalRoomMetrics(rooms), [rooms]);
+
   // Расчет итоговых финансовых показателей и объемов геометрии
   const totals = useMemo(() => {
-    return calculateProjectTotals(rooms, materials, 1400, 800);
-  }, [rooms, materials]);
+    return calculateProjectTotals(rooms, materials, 1400, 800, undefined, undefined, undefined, undefined, roomMetrics);
+  }, [rooms, materials, roomMetrics]);
 
   const totalFabricArea = totals.totalFabricArea;
   const totalProfileLength = totals.totalProfileLength;
@@ -231,19 +243,17 @@ export function App() {
   // Реактивное обновление комнат и автоматическая синхронизация объемов материалов
   const handleUpdateRooms = useCallback((newRooms: Room[]) => {
     setRooms(newRooms);
-
     const { totalFabricArea, totalProfileLength, totalPlinthLength } = calculateTotalRoomMetrics(newRooms);
+    if (totalFabricArea <= 0 && totalProfileLength <= 0) return;
 
-    if (totalFabricArea > 0 || totalProfileLength > 0) {
-      setMaterials((prevMaterials) =>
-        syncMaterialsWithGeometry(
-          prevMaterials,
-          totalFabricArea,
-          totalProfileLength,
-          totalPlinthLength
-        )
-      );
-    }
+    setMaterials((prevMaterials) =>
+      syncMaterialsWithGeometry(
+        prevMaterials,
+        totalFabricArea,
+        totalProfileLength,
+        totalPlinthLength
+      )
+    );
   }, []);
 
   const handleUpdateProject = useCallback((fields: Partial<Project>) => {
@@ -555,14 +565,15 @@ export function App() {
   // Экран входа и регистрации, если пользователь не авторизован
   if (!session) {
     return (
-      <AuthScreen
-        onAuthSuccess={handleAuthSuccess}
-      />
+      <Suspense fallback={<ScreenLoader label="Загрузка формы авторизации..." />}>
+        <AuthScreen onAuthSuccess={handleAuthSuccess} />
+      </Suspense>
     );
   }
 
   return (
-    <>
+    <Suspense fallback={<ScreenLoader label="Загрузка приложения..." />}>
+      <>
       {currentView === 'dashboard' ? (
         <DashboardScreen
           organization={organization}
@@ -784,7 +795,8 @@ export function App() {
         }}
         isFirstSetup={isFirstSetupModal}
       />
-    </>
+      </>
+    </Suspense>
   );
 }
 
