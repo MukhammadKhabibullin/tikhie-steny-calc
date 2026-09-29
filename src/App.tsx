@@ -10,6 +10,7 @@ import {
   findMatchingCatalogMaterial,
 } from './utils/calculator';
 import { DEFAULT_MATERIALS, DEFAULT_WORKS } from './data/prices';
+import { exportOrderWorkbook } from './utils/orderExport';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
 import { MaterialsSection } from './components/MaterialsSection';
@@ -116,6 +117,7 @@ export function App() {
 
   // Состояние сохранения в Supabase
   const [isSaving, setIsSaving] = useState(false);
+  const [isExportingOrder, setIsExportingOrder] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
@@ -391,8 +393,29 @@ export function App() {
     }
   }, [project, organization, rooms, materials, works]);
 
-  // Экспорт коммерческого предложения в буфер обмена
-  const handleExportEstimate = useCallback(() => {
+  // Экспорт бланка заказа в Excel по предоставленному шаблону
+  const handleExportEstimate = useCallback(async () => {
+    setIsExportingOrder(true);
+    try {
+      await exportOrderWorkbook({ project, materials, organization });
+      setNotification({
+        type: 'success',
+        message: 'Бланк заказа Excel успешно сформирован и скачан.',
+      });
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err) {
+      setNotification({
+        type: 'error',
+        message: `Не удалось сформировать бланк заказа: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setIsExportingOrder(false);
+    }
+  }, [project, materials, organization]);
+
+  // Текстовый экспорт коммерческого предложения сохраняется для внутреннего использования.
+  const handleCopyEstimate = useCallback(() => {
     const title = project.title.trim() || 'Смета без названия';
     const clientInfo = [
       project.clientName ? `Клиент: ${project.clientName}` : null,
@@ -713,12 +736,22 @@ export function App() {
 
                 <button
                   type="button"
+                  onClick={handleCopyEstimate}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white/15 hover:bg-white/25 active:scale-98 text-white transition border border-white/20 cursor-pointer"
+                  title="Скопировать коммерческое предложение в буфер обмена"
+                >
+                  <span>Копировать</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleExportEstimate}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white text-blue-900 hover:bg-blue-50 active:scale-98 transition shadow-md hover:shadow-lg cursor-pointer"
-                  title="Скопировать структурированное коммерческое предложение в буфер обмена"
+                  disabled={isExportingOrder}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-white text-blue-900 hover:bg-blue-50 active:scale-98 transition shadow-md hover:shadow-lg cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  title="Сформировать бланк заказа Excel по шаблону"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-                  <span>Экспорт</span>
+                  <span>{isExportingOrder ? 'Формирование...' : 'Заказ Excel'}</span>
                 </button>
               </div>
             </section>
