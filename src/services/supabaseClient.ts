@@ -22,7 +22,19 @@ const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrcWJ2eXFicGZsaWFsamJvYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMjQwODIsImV4cCI6MjEwNDYwMDA4Mn0.u5eUt7wIeI2CYlqiYCXArUuz-XB3aQGszX-l_naBwIc';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const fetchWithDiagnostics: typeof fetch = async (input, init) => {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const endpoint = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const reason = error instanceof Error ? error.message : 'network request failed';
+    throw new Error(`Supabase request failed (${endpoint}): ${reason}`, { cause: error });
+  }
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: fetchWithDiagnostics },
+});
 
 export type { User, Session };
 
@@ -172,8 +184,14 @@ export async function saveProjectToSupabase(
       }
     }
 
-    await supabase.from('project_materials').delete().eq('project_id', projectId);
-    await supabase.from('project_works').delete().eq('project_id', projectId);
+    const { error: deleteMaterialsError } = await supabase.from('project_materials').delete().eq('project_id', projectId);
+    if (deleteMaterialsError) {
+      return { success: false, error: `Не удалось обновить материалы: ${deleteMaterialsError.message}` };
+    }
+    const { error: deleteWorksError } = await supabase.from('project_works').delete().eq('project_id', projectId);
+    if (deleteWorksError) {
+      return { success: false, error: `Не удалось обновить работы: ${deleteWorksError.message}` };
+    }
     if (materials.length > 0) {
       const { error } = await supabase.from('project_materials').insert(materials.map((m) => ({
         id: ensureUUID(m.id), project_id: projectId, catalog_id: m.catalogId || null,
