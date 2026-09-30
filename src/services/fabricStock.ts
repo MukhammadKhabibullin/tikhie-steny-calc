@@ -15,7 +15,9 @@ const parseNumber = (value: string): number => {
 };
 
 export async function fetchFabricStock(signal?: AbortSignal): Promise<FabricStockItem[]> {
-  const response = await fetch(STOCK_URL, { signal, headers: { Accept: 'application/json' } });
+  const timeout = AbortSignal.timeout(10000);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  const response = await fetch(STOCK_URL, { signal: requestSignal, headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error(`Fabric stock request failed: ${response.status}`);
 
   const contentType = response.headers.get('content-type') || '';
