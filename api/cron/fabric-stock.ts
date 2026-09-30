@@ -9,6 +9,11 @@ const clean = (value: string): string => value.replace(/&nbsp;/gi, ' ').replace(
 
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
+  const cronSecret = process.env.CRON_SECRET;
+  const authorization = request.headers.get('authorization');
+  if (!cronSecret || authorization !== `Bearer ${cronSecret}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return new Response('Missing Supabase server credentials', { status: 500 });
