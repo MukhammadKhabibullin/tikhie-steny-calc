@@ -4,12 +4,13 @@ import {
   calculateProjectTotals,
   calculateRoomMetrics,
   calculateTotalRoomMetrics,
-  syncMaterialsWithGeometry,
   calculateProfilePieces,
   extractCatalogPrices,
   findMatchingCatalogMaterial,
+  catalogPricesForMaterial,
 } from './utils/calculator';
 import { DEFAULT_MATERIALS, DEFAULT_WORKS } from './data/prices';
+import { syncGeometryMaterials, syncGeometryProfiles, syncOpeningWorks } from './utils/geometrySync';
 import { exportOrderWorkbook } from './utils/orderExport';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
@@ -80,6 +81,7 @@ const createInitialMaterials = (): MaterialItem[] =>
       clientPrice: item.clientPrice,
       price: item.clientPrice,
       quantity: 0,
+      autoSource: item.category === 'profile' ? 'base-profile' : undefined,
       ...(item.category === 'profile' ? { profileUnitMode: 'm' as const } : {}),
     };
   });
@@ -202,7 +204,7 @@ export function App() {
             prevMaterials.map((mat) => {
               const matched = findMatchingCatalogMaterial(mat, items);
               if (matched) {
-                const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
+                const { costPrice, clientPrice, price } = catalogPricesForMaterial(mat, matched);
                 return {
                   ...mat,
                   catalogId: matched.id,
@@ -235,8 +237,8 @@ export function App() {
 
   // Расчет итоговых финансовых показателей и объемов геометрии
   const totals = useMemo(() => {
-    return calculateProjectTotals(rooms, materials, 1400, 800, undefined, undefined, undefined, undefined, roomMetrics);
-  }, [rooms, materials, roomMetrics]);
+    return calculateProjectTotals(rooms, materials, 1400, 800, undefined, undefined, undefined, undefined, roomMetrics, works);
+  }, [rooms, materials, roomMetrics, works]);
 
   const totalFabricArea = totals.totalFabricArea;
   const totalProfileLength = totals.totalProfileLength;
@@ -245,21 +247,20 @@ export function App() {
   // Реактивное обновление комнат и автоматическая синхронизация объемов материалов
   const handleUpdateRooms = useCallback((newRooms: Room[]) => {
     setRooms(newRooms);
-    const { totalFabricArea, totalProfileLength, totalPlinthLength } = calculateTotalRoomMetrics(newRooms);
-    if (totalFabricArea <= 0 && totalProfileLength <= 0) return;
+    setMaterials((previous) => syncGeometryMaterials(previous, newRooms, catalog));
+    setWorks((previous) => syncOpeningWorks(previous, newRooms));
+    setLastSavedAt(null);
+  }, [catalog]);
 
-    setMaterials((prevMaterials) =>
-      syncMaterialsWithGeometry(
-        prevMaterials,
-        totalFabricArea,
-        totalProfileLength,
-        totalPlinthLength
-      )
-    );
-  }, []);
+  const handleSyncGeometry = useCallback(() => handleUpdateRooms(rooms), [handleUpdateRooms, rooms]);
+  const handleUpdateMaterials = useCallback((next: MaterialItem[]) => {
+    setMaterials(syncGeometryProfiles(next, rooms, catalog));
+    setLastSavedAt(null);
+  }, [rooms, catalog]);
 
   const handleUpdateProject = useCallback((fields: Partial<Project>) => {
     setProject((prev) => ({ ...prev, ...fields }));
+    setLastSavedAt(null);
   }, []);
 
   // Перезагрузка каталога из Supabase
@@ -285,20 +286,18 @@ export function App() {
       return;
     }
 
-    let updatedCount = 0;
+    const updatedCount = materials.filter((mat) => findMatchingCatalogMaterial(mat, catalog)).length;
     setMaterials((prevMaterials) => {
       const next = prevMaterials.map((mat) => {
         const matched = findMatchingCatalogMaterial(mat, catalog);
         if (matched) {
-          updatedCount++;
-          const { costPrice, clientPrice, price } = extractCatalogPrices(matched);
+          const { costPrice, clientPrice, price } = catalogPricesForMaterial(mat, matched);
           return {
             ...mat,
             catalogId: matched.id,
             costPrice,
             clientPrice,
             price,
-            unit: matched.unit,
           };
         }
         return mat;
@@ -306,12 +305,14 @@ export function App() {
       return next;
     });
 
+    setLastSavedAt(null);
+
     setNotification({
       type: 'success',
       message: `Цены успешно синхронизированы с каталогом Supabase (${updatedCount} поз. обновлено)!`,
     });
     setTimeout(() => setNotification(null), 4000);
-  }, [catalog]);
+  }, [catalog, materials]);
 
   const handleOpenProjectsModal = useCallback(() => setIsProjectsModalOpen(true), []);
   const handleOpenCatalogModal = useCallback(() => setIsCatalogModalOpen(true), []);
@@ -349,6 +350,7 @@ export function App() {
     };
 
     setMaterials((prev) => [...prev, newItem]);
+    setLastSavedAt(null);
     setNotification({
       type: 'success',
       message: `Позиция «${catItem.name}» добавлена в смету (себестоимость: ${costPrice.toLocaleString('ru-RU')} ₽, клиенту: ${clientPrice.toLocaleString('ru-RU')} ₽)!`,
@@ -365,7 +367,7 @@ export function App() {
         ...project,
         organizationId: organization?.id || project.organizationId || null,
       };
-      const result = await saveProjectToSupabase(projectToSave, rooms, materials, works);
+      const result = await saveProjectToSupabase(projectToSave, rooms, materials, syncOpeningWorks(works, rooms));
       if (result.success && result.savedProject) {
         setProject(result.savedProject);
         if (result.savedRooms && result.savedRooms.length > 0) {
@@ -430,8 +432,8 @@ export function App() {
       ? rooms.map((r, idx) => {
           const metrics = calculateRoomMetrics(r);
           const openingsCount = r.openings?.length || 0;
-          const openingsInfo = openingsCount > 0 ? ` (${openingsCount} проемов, вычет ${metrics.openingsArea.toFixed(1)} м²)` : '';
-          return `${idx + 1}. ${r.name}: периметр ${metrics.perimeter} м, высота ${(r.ceilingHeight / 1000).toFixed(2)} м, площадь стен ${metrics.grossWallArea.toFixed(1)} м² (чистая ${metrics.netWallArea.toFixed(1)} м²)${openingsInfo}`;
+          const openingsInfo = openingsCount > 0 ? ` (${openingsCount} проемов, ${metrics.openingsArea.toFixed(1)} м² справочно, без вычета из ткани)` : '';
+          return `${idx + 1}. ${r.name}: периметр ${metrics.perimeter} м, высота ${(r.ceilingHeight / 1000).toFixed(2)} м, площадь стен ${metrics.grossWallArea.toFixed(1)} м², ткань с запасом ${metrics.fabricArea.toFixed(2)} м²${openingsInfo}`;
         }).join('\n')
       : '  (Помещения не заданы)';
 
@@ -462,6 +464,7 @@ export function App() {
       `• Профильные системы (с запасом 8%): ${totals.totalProfileLength.toFixed(1)} м пог.`,
       `• Стоимость материалов: ${totals.materialClientPrice.toLocaleString('ru-RU')} ₽`,
       `• Монтажные работы: ${totals.installationCost.toLocaleString('ru-RU')} ₽`,
+      `  Включая монтаж проёмов: ${totals.openingCount} × 6 000 ₽ = ${totals.openingInstallationCost?.toLocaleString('ru-RU')} ₽`,
       `• Накладные и транспортные расходы: ${totals.overheadCost.toLocaleString('ru-RU')} ₽`,
       `==================================================`,
       `ИТОГО К ОПЛАТЕ КЛИЕНТОМ: ${totals.totalClientPrice.toLocaleString('ru-RU')} ₽`,
@@ -494,11 +497,10 @@ export function App() {
   // Загрузка сохраненного проекта из Supabase и переход в редактор
   const handleSelectSavedProject = useCallback((loadedProject: Project, loadedRooms: Room[], loadedMaterials: MaterialItem[], loadedWorks: WorkItem[]) => {
     setProject(loadedProject);
-    setMaterials(loadedMaterials.length > 0 ? loadedMaterials : createInitialMaterials());
-    setWorks(loadedWorks);
-    if (loadedRooms && loadedRooms.length > 0) {
-      setRooms(loadedRooms);
-    }
+    // Keep legacy manual quantities until the user explicitly recalculates geometry.
+    setMaterials(loadedMaterials);
+    setWorks(syncOpeningWorks(loadedWorks, loadedRooms));
+    setRooms(loadedRooms);
     setLastSavedAt(new Date().toISOString());
     setCurrentView('editor');
     setNotification({
@@ -644,7 +646,7 @@ export function App() {
                   Геометрия помещений и стен (Multi-Room)
                 </h2>
                 <div className="text-xs text-slate-600">
-                  Высота потолков и проемы с автовычетом
+                  Геометрия стен, проемы и профили
                 </div>
               </div>
               <RoomBuilder rooms={rooms} onUpdateRooms={handleUpdateRooms} />
@@ -665,7 +667,8 @@ export function App() {
               </div>
               <MaterialsSection
                 materials={materials}
-                onUpdateMaterials={setMaterials}
+                onUpdateMaterials={handleUpdateMaterials}
+                onSyncGeometry={handleSyncGeometry}
                 calculatedFabricArea={totalFabricArea}
                 calculatedProfileLength={totalProfileLength}
                 calculatedPlinthLength={totalPlinthLength}

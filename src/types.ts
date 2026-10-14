@@ -41,6 +41,8 @@ export interface Room {
   ceilingHeight: number; // в мм
   walls: Wall[];
   openings: Opening[];
+  // Walls form an ordered chain. Legacy rooms default to an open chain.
+  contour?: 'open' | 'closed';
 }
 
 export interface MaterialItem {
@@ -54,6 +56,7 @@ export interface MaterialItem {
   price?: number; // розничная цена / цена клиенту (алиас для clientPrice)
   quantity: number; // количество
   profileUnitMode?: 'm' | 'pcs'; // режим для профиля: метры или 2-метровые штуки
+  autoSource?: 'base-profile' | 'corner-profile' | 'opening-profile';
 }
 
 export interface Organization {
@@ -99,6 +102,7 @@ export interface WorkItem {
   costPrice: number;
   clientPrice: number;
   quantity: number;
+  autoSource?: 'opening-installation';
 }
 
 export interface Project {
@@ -113,6 +117,10 @@ export interface Project {
 }
 
 export interface CalculationResult {
+  openingCount?: number;
+  openingInstallationCost?: number;
+  baseInstallationCost?: number;
+  additionalWorksCost?: number;
   totalFabricArea: number; // м² (с технологическим запасом)
   totalProfileLength: number; // пог. м (с запасом 8%)
   totalPlinthLength?: number; // пог. м плинтуса (с запасом 5%)
@@ -137,6 +145,7 @@ export interface RoomCalculationResult {
   openingsArea: number; // м²
   netWallArea: number; // м²
   fabricAreaWithReserve?: number; // м² (с запасом)
+  fabricArea: number; // Full wall area including fabric reserve; openings are not deducted.
   profileLengthWithReserve: number; // м
   plinthLengthWithReserve?: number; // м
 }

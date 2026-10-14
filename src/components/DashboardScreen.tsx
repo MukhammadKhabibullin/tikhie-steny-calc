@@ -284,7 +284,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <div>
                 <div className="text-xs font-bold text-slate-800">Multi-Room расчет</div>
                 <div className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                  Неограниченное число помещений, стен и проемов с автовычетом площадей
+                  Помещения, стены и проемы с автоматическим расчётом ткани и профилей
                 </div>
               </div>
             </div>

@@ -109,6 +109,14 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
               <p className="text-xs text-indigo-900/70 mt-1">
                 Чистая установка системы (каркас, демпфер, натяжка ткани) мастерами монтажа.
               </p>
+              <p className="text-xs text-indigo-900/70 mt-2">
+                Основной монтаж: {formatCurrency(results.baseInstallationCost ?? results.installationCost)}
+              </p>
+              <p className="text-xs text-indigo-900/70 mt-1">
+                Проёмы: {results.openingCount ?? 0} × 6 000 ₽ = {formatCurrency(results.openingInstallationCost ?? 0)}
+              </p>
+              {!!results.additionalWorksCost && <p className="text-xs text-indigo-900/70 mt-1">Дополнительные работы: {formatCurrency(results.additionalWorksCost)}</p>}
+              {!!results.openingCount && <p className="text-[11px] text-slate-600 mt-1">Оплата мастерам за проёмы не задана и в себестоимость не включена.</p>}
             </div>
 
             <div className="mt-4 pt-3 border-t border-indigo-200/60 flex items-center justify-between text-xs text-indigo-800">

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { MaterialItem, MaterialCategory, UnitType, CatalogMaterialItem } from '../types';
-import { calculateProfilePieces, syncMaterialsWithGeometry, extractCatalogPrices } from '../utils/calculator';
+import { calculateProfilePieces, extractCatalogPrices, roundTo } from '../utils/calculator';
+import { NumericInput } from './NumericInput';
 import { DEFAULT_MATERIALS } from '../data/prices';
 import {
   Package,
@@ -31,6 +32,7 @@ interface MaterialsSectionProps {
   onOpenCatalogModal?: () => void;
   onSyncPricesWithCatalog?: () => void;
   onAddCatalogItem?: (item: CatalogMaterialItem) => void;
+  onSyncGeometry: () => void;
 }
 
 const CATEGORY_NAMES: Record<MaterialCategory, string> = {
@@ -96,17 +98,21 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
             <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 select-none">
               {CATEGORY_NAMES[item.category] || item.category}
             </span>
+            {item.autoSource && <span className="text-[10px] text-blue-600" title="Количество пересчитывается по геометрии. Для дополнительного профиля добавьте ручную позицию.">Авто</span>}
+            {item.autoSource && !item.catalogId && <span className="text-[10px] text-amber-700" title="Позиция не найдена в загруженном каталоге. Используется цена встроенного прайс-листа; её можно изменить или синхронизировать позже.">Цена из шаблона</span>}
+            {item.category === 'profile' && !item.autoSource && <span className="text-[10px] text-slate-500" title="Ручная позиция сохраняется дополнительно к автоматическим профилям. Старые проекты не переводятся в автоматический режим без вашего решения.">Ручная</span>}
           </div>
           <div className="relative flex items-center">
             <input
               type="text"
+              readOnly={!!item.autoSource}
               value={item.name}
               onChange={(e) => {
                 onUpdateItem(item.id, { name: e.target.value });
                 onOpenDropdown(item.id, e.currentTarget);
               }}
-              onFocus={(e) => onOpenDropdown(item.id, e.currentTarget)}
-              onClick={(e) => onOpenDropdown(item.id, e.currentTarget)}
+              onFocus={(e) => { if (!item.autoSource) onOpenDropdown(item.id, e.currentTarget); }}
+              onClick={(e) => { if (!item.autoSource) onOpenDropdown(item.id, e.currentTarget); }}
               autoComplete="off"
               spellCheck={false}
               className="w-full font-semibold text-slate-800 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none px-1 py-0.5 pr-6 cursor-text"
@@ -114,6 +120,7 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
             />
             <button
               type="button"
+              disabled={!!item.autoSource}
               onClick={(e) => {
                 e.stopPropagation();
                 if (isDropdownOpen) {
@@ -139,6 +146,7 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
       <td className="py-2.5 px-3 text-center">
         <select
           value={item.unit}
+          disabled={!!item.autoSource}
           onChange={(e) =>
             onUpdateItem(item.id, {
               unit: e.target.value as UnitType,
@@ -160,16 +168,16 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
 
       {/* Количество */}
       <td className="py-2.5 px-3 text-right">
-        <input
-          type="number"
+        <NumericInput
+          aria-label={`Количество: ${item.name}`}
+          readOnly={!!item.autoSource}
           value={item.quantity}
-          onChange={(e) =>
+          onValueChange={(value) =>
             onUpdateItem(item.id, {
-              quantity: Math.max(0, Number(e.target.value) || 0),
+              quantity: value,
             })
           }
           className="w-24 text-right font-mono font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-          min={0}
           step={item.unit === 'pcs' ? 1 : 0.1}
         />
       </td>
@@ -177,16 +185,15 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
       {/* Себестоимость (закупочная цена) */}
       <td className="py-2.5 px-3 text-right">
         <div className="relative">
-          <input
-            type="number"
+          <NumericInput
+            aria-label={`Закупочная цена: ${item.name}`}
             value={item.costPrice}
-            onChange={(e) =>
+            onValueChange={(value) =>
               onUpdateItem(item.id, {
-                costPrice: Math.max(0, Number(e.target.value) || 0),
+                costPrice: value,
               })
             }
             className="w-28 text-right font-mono text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-            min={0}
             title="Себестоимость / закупочная цена за ед."
           />
         </div>
@@ -195,18 +202,16 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
       {/* Цена клиенту (розничная цена) */}
       <td className="py-2.5 px-3 text-right">
         <div className="relative">
-          <input
-            type="number"
+          <NumericInput
+            aria-label={`Цена клиенту: ${item.name}`}
             value={item.clientPrice ?? item.price ?? 0}
-            onChange={(e) => {
-              const newPrice = Math.max(0, Number(e.target.value) || 0);
+            onValueChange={(newPrice) => {
               onUpdateItem(item.id, {
                 clientPrice: newPrice,
                 price: newPrice,
               });
             }}
             className="w-28 text-right font-mono font-bold text-blue-700 bg-blue-50/50 border border-blue-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
-            min={0}
             title="Цена клиенту / розничная цена за ед."
           />
         </div>
@@ -226,8 +231,9 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
       <td className="py-2.5 px-3 text-center">
         <button
           onClick={() => onDeleteItem(item.id)}
+          disabled={!!item.autoSource}
           className="p-1 text-slate-600 hover:text-red-500 rounded hover:bg-red-50 transition"
-          title="Удалить материал"
+          title={item.autoSource ? 'Автоматический профиль удаляется при изменении геометрии' : 'Удалить материал'}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -246,6 +252,7 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
   onOpenCatalogModal,
   onSyncPricesWithCatalog,
   onAddCatalogItem,
+  onSyncGeometry,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -589,24 +596,11 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
 
   // Автоматическая привязка объемов из геометрии комнат (ткань, звукоизоляция, профили, плинтусы)
   const handleSyncWithGeometry = useCallback(() => {
-    const effectivePlinthLength = calculatedPlinthLength || calculatedProfileLength;
-    const updated = syncMaterialsWithGeometry(
-      materials,
-      calculatedFabricArea,
-      calculatedProfileLength,
-      effectivePlinthLength,
-      profileViewMode
-    );
-    onUpdateMaterials(updated);
+    onSyncGeometry();
     setSyncFeedback(true);
     setTimeout(() => setSyncFeedback(false), 2500);
   }, [
-    materials,
-    calculatedFabricArea,
-    calculatedProfileLength,
-    calculatedPlinthLength,
-    profileViewMode,
-    onUpdateMaterials,
+    onSyncGeometry,
   ]);
 
   // Переключение режима профилей (метры <-> штуки по 2м)
@@ -623,9 +617,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
             ...item,
             unit: 'pcs' as UnitType,
             quantity: pieces,
-            costPrice: Math.round(item.costPrice * 2),
-            clientPrice: Math.round((item.clientPrice ?? item.price ?? 0) * 2),
-            price: Math.round((item.clientPrice ?? item.price ?? 0) * 2),
+            costPrice: roundTo(item.costPrice * 2),
+            clientPrice: roundTo((item.clientPrice ?? item.price ?? 0) * 2),
+            price: roundTo((item.clientPrice ?? item.price ?? 0) * 2),
             profileUnitMode: 'pcs' as const,
           };
         } else if (nextMode === 'm' && item.unit === 'pcs') {
@@ -634,9 +628,9 @@ const MaterialsSectionComponent: React.FC<MaterialsSectionProps> = ({
             ...item,
             unit: 'm' as UnitType,
             quantity: meters,
-            costPrice: Math.round(item.costPrice / 2),
-            clientPrice: Math.round((item.clientPrice ?? item.price ?? 0) / 2),
-            price: Math.round((item.clientPrice ?? item.price ?? 0) / 2),
+            costPrice: roundTo(item.costPrice / 2),
+            clientPrice: roundTo((item.clientPrice ?? item.price ?? 0) / 2),
+            price: roundTo((item.clientPrice ?? item.price ?? 0) / 2),
             profileUnitMode: 'm' as const,
           };
         }

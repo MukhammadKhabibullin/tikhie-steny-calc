@@ -1,11 +1,11 @@
-import type { Room, MaterialItem, CatalogMaterialItem, CalculationResult, RoomCalculationResult } from '../types';
+import type { Room, MaterialItem, WorkItem, CatalogMaterialItem, CalculationResult, RoomCalculationResult } from '../types';
 import { OVERHEAD_RATE } from '../data/prices';
 
 /**
  * Конвертация миллиметров в метры
  */
 export const mmToM = (mm: number): number => {
-  return (mm || 0) / 1000;
+  return Number.isFinite(mm) ? Math.max(0, mm) / 1000 : 0;
 };
 
 /**
@@ -21,15 +21,14 @@ export const roundTo = (num: number, decimals: number = 2): number => {
  */
 export const calculateRoomPerimeter = (room: Room): number => {
   if (!room.walls || room.walls.length === 0) return 0;
-  const totalMm = room.walls.reduce((acc, wall) => acc + (Number(wall.length) || 0), 0);
-  return roundTo(mmToM(totalMm));
+  return roundTo(room.walls.reduce((acc, wall) => acc + mmToM(wall.length), 0));
 };
 
 /**
  * Расчет общей (брутто) площади стен комнаты (в м²) без вычета проемов
  */
 export const calculateGrossWallArea = (room: Room): number => {
-  const perimeter = calculateRoomPerimeter(room);
+  const perimeter = room.walls.reduce((sum, wall) => sum + mmToM(wall.length), 0);
   const heightInM = mmToM(room.ceilingHeight);
   return roundTo(perimeter * heightInM);
 };
@@ -39,24 +38,24 @@ export const calculateGrossWallArea = (room: Room): number => {
  */
 export const calculateOpeningsArea = (room: Room): number => {
   if (!room.openings || room.openings.length === 0) return 0;
-  const totalAreaMm2 = room.openings.reduce((acc, opening) => {
-    const w = Number(opening.width) || 0;
-    const h = Number(opening.height) || 0;
-    return acc + w * h;
+  const totalAreaM2 = room.openings.reduce((acc, opening) => {
+    return acc + mmToM(opening.width) * mmToM(opening.height);
   }, 0);
-  // Перевод из мм² в м² (делим на 1 000 000)
-  return roundTo(totalAreaMm2 / 1_000_000);
+  return roundTo(totalAreaM2);
 };
 
 /**
- * Расчет чистой площади стен / ткани для комнаты (в м²) за вычетом окон и дверей
+ * Net wall area for reference only, not the fabric purchase area.
  */
-export const calculateNetFabricArea = (room: Room): number => {
+export const calculateNetWallArea = (room: Room): number => {
   const gross = calculateGrossWallArea(room);
   const openings = calculateOpeningsArea(room);
   const net = Math.max(0, gross - openings);
   return roundTo(net);
 };
+
+/** @deprecated Use calculateGrossWallArea for fabric, calculateNetWallArea for net geometry. */
+export const calculateNetFabricArea = calculateGrossWallArea;
 
 /**
  * Коэффициенты технологического запаса для системы «Тихие Стены»
@@ -64,6 +63,38 @@ export const calculateNetFabricArea = (room: Room): number => {
 export const FABRIC_RESERVE_FACTOR = 1.05; // +5% технологический припуск на раскрой и заправку полотна в профиль
 export const PROFILE_RESERVE_FACTOR = 1.08; // +8% технологический запас на обрезки и стыки профиля
 export const PLINTH_RESERVE_FACTOR = 1.05; // +5% технологический запас на подрезку углов плинтуса
+export const OPENING_INSTALLATION_PRICE = 6000;
+
+export const isClosedContour = (room: Room): boolean => room.contour === 'closed' && room.walls.length >= 3;
+
+/** Ordered walls are connected. A single wall uses its length per the business rule;
+ * multi-wall chains use ceiling height for each free end and each shared corner.
+ * Horizontal rails are not added implicitly. Zero-length walls break the chain.
+ */
+export const calculateRoomProfiles = (room: Room, reserveFactor = PROFILE_RESERVE_FACTOR) => {
+  const walls = room.walls;
+  let base = 0;
+  let corner = 0;
+  const height = Math.max(0, mmToM(room.ceilingHeight));
+  const closed = isClosedContour(room);
+  walls.forEach((wall, index) => {
+    if (wall.length <= 0) return;
+    const previous = walls[index - 1] ?? (closed ? walls.at(-1) : undefined);
+    const next = walls[index + 1] ?? (closed ? walls[0] : undefined);
+    const hasPrevious = !!previous && previous.length > 0;
+    const hasNext = !!next && next.length > 0;
+    if (!hasPrevious && !hasNext) base += mmToM(wall.length);
+    else base += ((!hasPrevious ? 1 : 0) + (!hasNext ? 1 : 0)) * height;
+    if (hasNext) corner += height;
+  });
+  const opening = room.openings.reduce((sum, item) =>
+    sum + 2 * (Math.max(0, mmToM(item.width)) + Math.max(0, mmToM(item.height))), 0);
+  return {
+    'base-profile': roundTo(base * reserveFactor),
+    'corner-profile': roundTo(corner * reserveFactor),
+    'opening-profile': roundTo(opening * reserveFactor),
+  };
+};
 
 /**
  * Расчет необходимого метража основного профиля для комнаты с учетом технологического запаса
@@ -71,8 +102,7 @@ export const PLINTH_RESERVE_FACTOR = 1.05; // +5% технологический
  * @param reserveFactor коэффициент запаса (по умолчанию 1.08 = +8% на обрезки и стыки)
  */
 export const calculateProfileLength = (room: Room, reserveFactor: number = PROFILE_RESERVE_FACTOR): number => {
-  const perimeter = calculateRoomPerimeter(room);
-  return roundTo(perimeter * reserveFactor);
+  return roundTo(Object.values(calculateRoomProfiles(room, reserveFactor)).reduce((sum, value) => sum + value, 0));
 };
 
 /**
@@ -85,12 +115,11 @@ export const calculateRoomMetrics = (
   plinthReserveFactor: number = PLINTH_RESERVE_FACTOR
 ): RoomCalculationResult => {
   const perimeter = calculateRoomPerimeter(room);
-  const heightInM = mmToM(room.ceilingHeight);
-  const grossWallArea = roundTo(perimeter * heightInM);
+  const grossWallArea = calculateGrossWallArea(room);
   const openingsArea = calculateOpeningsArea(room);
   const netWallArea = roundTo(Math.max(0, grossWallArea - openingsArea));
-  const fabricAreaWithReserve = roundTo(netWallArea * fabricReserveFactor);
-  const profileLengthWithReserve = roundTo(perimeter * profileReserveFactor);
+  const fabricAreaWithReserve = roundTo(grossWallArea * fabricReserveFactor);
+  const profileLengthWithReserve = calculateProfileLength(room, profileReserveFactor);
   const plinthLengthWithReserve = roundTo(perimeter * plinthReserveFactor);
 
   return {
@@ -100,6 +129,7 @@ export const calculateRoomMetrics = (
     openingsArea,
     netWallArea,
     fabricAreaWithReserve,
+    fabricArea: fabricAreaWithReserve,
     profileLengthWithReserve,
     plinthLengthWithReserve,
   };
@@ -162,11 +192,11 @@ export const calculateTotalRoomMetrics = (
 };
 
 /**
- * Расчет суммарной чистой площади ткани по всем комнатам проекта (в м²)
+ * Full fabric area before reserve; openings never reduce fabric quantities.
  */
 export const calculateTotalFabricArea = (rooms: Room[]): number => {
   if (!rooms || rooms.length === 0) return 0;
-  const total = rooms.reduce((acc, room) => acc + calculateNetFabricArea(room), 0);
+  const total = rooms.reduce((acc, room) => acc + calculateGrossWallArea(room), 0);
   return roundTo(total);
 };
 
@@ -215,14 +245,24 @@ export const extractCatalogPrices = (
   const costNum = Number(rawCost);
   const clientNum = Number(rawClient);
 
-  const costPrice = isNaN(costNum) ? 0 : Math.max(0, costNum);
-  const clientPrice = isNaN(clientNum) ? 0 : Math.max(0, clientNum);
+  const costPrice = Number.isFinite(costNum) ? Math.max(0, costNum) : 0;
+  const clientPrice = Number.isFinite(clientNum) ? Math.max(0, clientNum) : 0;
 
   return {
     costPrice,
     clientPrice,
     price: clientPrice,
   };
+};
+
+export const catalogPricesForMaterial = (item: MaterialItem, catalogItem: CatalogMaterialItem) => {
+  const prices = extractCatalogPrices(catalogItem);
+  const factor = item.category === 'profile' && item.unit !== catalogItem.unit
+    ? (item.unit === 'pcs' && catalogItem.unit === 'm' ? 2 : item.unit === 'm' && catalogItem.unit === 'pcs' ? 0.5 : 1)
+    : 1;
+  const costPrice = roundTo(prices.costPrice * factor);
+  const clientPrice = roundTo(prices.clientPrice * factor);
+  return { costPrice, clientPrice, price: clientPrice };
 };
 
 /**
@@ -318,7 +358,8 @@ export const calculateProjectTotals = (
   fabricReserveFactor: number = FABRIC_RESERVE_FACTOR,
   plinthReserveFactor: number = PLINTH_RESERVE_FACTOR,
   overheadRate: { percent: number; minAmount: number } = OVERHEAD_RATE,
-  roomMetrics?: ReturnType<typeof calculateTotalRoomMetrics>
+  roomMetrics?: ReturnType<typeof calculateTotalRoomMetrics>,
+  works: WorkItem[] = []
 ): CalculationResult => {
   const {
     totalFabricArea,
@@ -334,8 +375,15 @@ export const calculateProjectTotals = (
   const materialsClient = calculateMaterialsClientPrice(materials);
 
   // Стоимость монтажа (чистая стоимость работ для клиента и себестоимость оплаты мастерам)
-  const installationCostPrice = roundTo(totalFabricArea * installationCostPriceRate);
-  const installationClient = roundTo(totalFabricArea * installationRatePerM2);
+  const openingCount = rooms.reduce((sum, room) => sum + room.openings.length, 0);
+  const openingInstallationCost = openingCount * OPENING_INSTALLATION_PRICE;
+  const manualWorks = works.filter((work) => work.autoSource !== 'opening-installation');
+  const additionalWorksCost = roundTo(manualWorks.reduce((sum, work) => sum + work.quantity * work.clientPrice, 0));
+  // Opening labor cost is not specified; do not invent a contractor payment rate.
+  const additionalCostPrice = manualWorks.reduce((sum, work) => sum + work.quantity * work.costPrice, 0);
+  const installationCostPrice = roundTo(totalFabricArea * installationCostPriceRate + additionalCostPrice);
+  const baseInstallationCost = roundTo(totalFabricArea * installationRatePerM2);
+  const installationClient = roundTo(baseInstallationCost + openingInstallationCost + additionalWorksCost);
 
   // Накладные и транспортные расходы (автономная статья расходов: 6% от материалов, но минимум 6 500 руб.)
   const hasActiveItems = (materials && materials.some((m) => m.quantity > 0)) || totalFabricArea > 0;
@@ -350,6 +398,10 @@ export const calculateProjectTotals = (
   const marginPercent = totalClientPrice > 0 ? roundTo((margin / totalClientPrice) * 100, 1) : 0;
 
   return {
+    openingCount,
+    openingInstallationCost,
+    baseInstallationCost,
+    additionalWorksCost,
     totalFabricArea,
     totalProfileLength,
     totalPlinthLength,
@@ -374,18 +426,14 @@ export const calculateProjectTotals = (
 export const syncMaterialsWithGeometry = (
   materials: MaterialItem[],
   totalFabricArea: number,
-  totalProfileLength: number,
   totalPlinthLength: number,
-  profileViewMode: 'm' | 'pcs' = 'm'
+  totalInsulationArea: number = totalFabricArea
 ): MaterialItem[] => {
   const fabricItems = materials.filter((m) => m.category === 'fabric');
   const primaryFabricId = fabricItems.find((f) => f.quantity > 0)?.id || fabricItems[0]?.id;
 
   const insulationItems = materials.filter((m) => m.category === 'insulation');
   const primaryInsulationId = insulationItems.find((ins) => ins.quantity > 0)?.id || insulationItems[0]?.id;
-
-  const profileItems = materials.filter((m) => m.category === 'profile');
-  const primaryProfileId = profileItems.find((p) => p.quantity > 0)?.id || profileItems[0]?.id;
 
   const plinthItems = materials.filter((m) => m.category === 'plinth');
   const primaryPlinthId = plinthItems.find((pl) => pl.quantity > 0)?.id || plinthItems[0]?.id;
@@ -399,19 +447,7 @@ export const syncMaterialsWithGeometry = (
     }
     if (item.category === 'insulation') {
       if (item.id === primaryInsulationId || insulationItems.length === 1) {
-        return { ...item, quantity: totalFabricArea, unit: 'm2' as const };
-      }
-      return item;
-    }
-    if (item.category === 'profile') {
-      if (item.id === primaryProfileId || profileItems.length === 1) {
-        const isPcs = item.profileUnitMode === 'pcs' || item.unit === 'pcs' || profileViewMode === 'pcs';
-        return {
-          ...item,
-          quantity: isPcs ? calculateProfilePieces(totalProfileLength, 2) : totalProfileLength,
-          unit: isPcs ? ('pcs' as const) : ('m' as const),
-          profileUnitMode: isPcs ? ('pcs' as const) : ('m' as const),
-        };
+        return { ...item, quantity: totalInsulationArea, unit: 'm2' as const };
       }
       return item;
     }

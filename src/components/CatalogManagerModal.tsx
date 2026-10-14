@@ -1,3 +1,4 @@
+import { NumericInput } from './NumericInput';
 import React, { useState, useMemo } from 'react';
 import type {
   CatalogMaterialItem,
@@ -501,10 +502,9 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
               <span className="text-xs text-slate-500">
                 {activeTab === 'materials' ? 'Закупка:' : 'ЗП монтаж:'}
               </span>
-              <input
-                type="number"
+<NumericInput
                 value={newCostPrice}
-                onChange={(e) => setNewCostPrice(Number(e.target.value) || 0)}
+                onValueChange={(value) => setNewCostPrice(value)}
                 className="w-24 text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5 outline-none font-mono"
                 placeholder="Закупка"
               />
@@ -512,10 +512,9 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
 
             <div className="flex items-center gap-1">
               <span className="text-xs text-slate-500">Клиенту:</span>
-              <input
-                type="number"
+<NumericInput
                 value={newClientPrice}
-                onChange={(e) => setNewClientPrice(Number(e.target.value) || 0)}
+                onValueChange={(value) => setNewClientPrice(value)}
                 className="w-24 text-xs bg-white border border-blue-400 rounded-lg px-2 py-1.5 outline-none font-mono font-bold text-blue-700"
                 placeholder="Клиенту"
               />
@@ -673,26 +672,24 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
                             </select>
                           </td>
                           <td className="py-2 px-4 text-right">
-                            <input
-                              type="number"
+<NumericInput
                               value={editMatFields.costPrice}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setEditMatFields({
                                   ...editMatFields,
-                                  costPrice: Number(e.target.value) || 0,
+                                  costPrice: value,
                                 })
                               }
                               className="w-20 text-right font-mono text-xs bg-white border border-slate-300 rounded px-2 py-1"
                             />
                           </td>
                           <td className="py-2 px-4 text-right">
-                            <input
-                              type="number"
+<NumericInput
                               value={editMatFields.clientPrice}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setEditMatFields({
                                   ...editMatFields,
-                                  clientPrice: Number(e.target.value) || 0,
+                                  clientPrice: value,
                                 })
                               }
                               className="w-20 text-right font-mono font-bold text-xs bg-white border border-blue-400 rounded px-2 py-1"
@@ -865,26 +862,24 @@ export const CatalogManagerModal: React.FC<CatalogManagerModalProps> = ({
                             </select>
                           </td>
                           <td className="py-2 px-4 text-right">
-                            <input
-                              type="number"
+<NumericInput
                               value={editWorkFields.costPrice}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setEditWorkFields({
                                   ...editWorkFields,
-                                  costPrice: Number(e.target.value) || 0,
+                                  costPrice: value,
                                 })
                               }
                               className="w-20 text-right font-mono text-xs bg-white border border-slate-300 rounded px-2 py-1"
                             />
                           </td>
                           <td className="py-2 px-4 text-right">
-                            <input
-                              type="number"
+<NumericInput
                               value={editWorkFields.clientPrice}
-                              onChange={(e) =>
+                              onValueChange={(value) =>
                                 setEditWorkFields({
                                   ...editWorkFields,
-                                  clientPrice: Number(e.target.value) || 0,
+                                  clientPrice: value,
                                 })
                               }
                               className="w-20 text-right font-mono font-bold text-xs bg-white border border-indigo-400 rounded px-2 py-1"

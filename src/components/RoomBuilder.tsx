@@ -4,6 +4,7 @@ import {
   calculateRoomMetrics
 } from '../utils/calculator';
 import { WallDiagram } from './WallDiagram';
+import { NumericInput } from './NumericInput';
 import {
   Plus,
   Trash2,
@@ -70,14 +71,14 @@ const WallItemRow = React.memo<WallItemRowProps>(({
         placeholder="Название"
       />
       <div className="relative flex-1" onClick={(e) => e.stopPropagation()}>
-        <input
-          type="number"
+        <NumericInput
+          aria-label={`Длина стены ${index + 1}, мм`}
           value={wall.length}
-          onChange={(e) =>
-            onUpdate(wall.id, { length: Number(e.target.value) || 0 })
+          onValueChange={(value) =>
+            onUpdate(wall.id, { length: value })
           }
           className="w-full text-xs font-mono font-semibold text-slate-900 bg-slate-50/80 border border-slate-200 rounded-md px-2 py-1 pr-9 outline-none focus:ring-1 focus:ring-blue-500"
-          min={100}
+          max={1_000_000}
           step={50}
         />
         <span className="absolute right-2 top-1 text-[11px] text-slate-600 font-mono">
@@ -206,12 +207,13 @@ const OpeningItemRow = React.memo<OpeningItemRowProps>(({
 
       {/* Ширина */}
       <div className="relative w-24">
-        <input
-          type="number"
+        <NumericInput
+          aria-label="Ширина проёма, мм"
+          max={1_000_000}
           value={op.width}
-          onChange={(e) =>
+          onValueChange={(value) =>
             onUpdate(op.id, {
-              width: Number(e.target.value) || 0,
+              width: value,
             })
           }
           className="w-full text-xs font-mono font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 pr-6 outline-none"
@@ -224,12 +226,13 @@ const OpeningItemRow = React.memo<OpeningItemRowProps>(({
 
       {/* Высота */}
       <div className="relative w-24">
-        <input
-          type="number"
+        <NumericInput
+          aria-label="Высота проёма, мм"
+          max={1_000_000}
           value={op.height}
-          onChange={(e) =>
+          onValueChange={(value) =>
             onUpdate(op.id, {
-              height: Number(e.target.value) || 0,
+              height: value,
             })
           }
           className="w-full text-xs font-mono font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 pr-6 outline-none"
@@ -239,7 +242,7 @@ const OpeningItemRow = React.memo<OpeningItemRowProps>(({
       </div>
 
       <span className="text-xs font-mono font-semibold text-amber-700 ml-auto">
-        -{areaM2} м²
+        {areaM2} м²
       </span>
 
       <button
@@ -296,6 +299,7 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
       ceilingHeight: 2700,
       walls: [],
       openings: [],
+      contour: 'open',
     };
 
     const updated = [...roomsRef.current, newRoom];
@@ -359,7 +363,7 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
     });
 
     const updated = roomsRef.current.map((r) =>
-      r.id === current.id ? { ...r, walls: remainingWalls, openings: updatedOpenings } : r
+      r.id === current.id ? { ...r, contour: 'open' as const, walls: remainingWalls, openings: updatedOpenings } : r
     );
     onUpdateRooms(updated);
 
@@ -455,7 +459,7 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
                     isActive ? 'bg-blue-700/80 text-blue-100' : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {m ? m.netWallArea : 0} м²
+                  {m ? m.grossWallArea : 0} м²
                 </span>
               </button>
             );
@@ -526,15 +530,14 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
               </div>
 
               <div className="relative">
-                <input
-                  type="number"
+                <NumericInput
+                  aria-label="Высота потолков, мм"
                   value={activeRoom.ceilingHeight}
-                  onChange={(e) =>
-                    handleUpdateActiveRoom({ ceilingHeight: Number(e.target.value) || 0 })
+                  onValueChange={(value) =>
+                    handleUpdateActiveRoom({ ceilingHeight: value })
                   }
                   className="w-full text-base font-mono font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  min={1000}
-                  max={10000}
+                  max={1_000_000}
                   step={50}
                 />
                 <span className="absolute right-3.5 top-2.5 text-xs text-slate-600 font-medium">
@@ -563,6 +566,15 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
               </button>
             </div>
 
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={activeRoom.contour === 'closed' && activeRoom.walls.length >= 3}
+                disabled={activeRoom.walls.length < 3}
+                onChange={(event) => handleUpdateActiveRoom({ contour: event.target.checked ? 'closed' : 'open' })}
+              />
+              Замкнутый контур (от 3 стен). Стены соединены по порядку; при удалении стены контур размыкается.
+            </label>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               {/* Левая колонка: список стен для редактирования */}
               <div className="lg:col-span-5 bg-slate-50/50 rounded-xl p-3 border border-slate-200/80 space-y-2 max-h-[350px] overflow-y-auto">
@@ -623,13 +635,14 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
               <div className="flex items-center gap-2">
                 <Maximize2 className="w-4 h-4 text-amber-600" />
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-                  Проемы (вычеты) ({activeRoom.openings.length})
+                  Проемы ({activeRoom.openings.length})
                 </h3>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleAddOpening('window')}
+                  disabled={activeRoom.walls.length === 0}
                   className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200 transition shadow-2xs"
                   title={
                     selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId)
@@ -651,6 +664,7 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
                 <button
                   type="button"
                   onClick={() => handleAddOpening('door')}
+                  disabled={activeRoom.walls.length === 0}
                   className="inline-flex items-center gap-1 text-xs font-semibold bg-orange-50 text-orange-800 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200 transition shadow-2xs"
                   title={
                     selectedWallId !== 'all' && activeRoom.walls.some((w) => w.id === selectedWallId)
@@ -676,7 +690,7 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
               <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-200/80 space-y-2 max-h-[320px] overflow-y-auto">
                 {activeRoom.openings.length === 0 ? (
                   <div className="text-center py-6 text-xs text-slate-600">
-                    Нет проемов. Добавьте окна или двери для автоматического вычета из площади ткани.
+                    Добавьте окна или двери для расчёта откосного профиля и монтажа. Площадь ткани не уменьшается.
                   </div>
                 ) : (
                   activeRoom.openings.map((op) => (
@@ -734,18 +748,18 @@ const RoomBuilderComponent: React.FC<RoomBuilderProps> = ({ rooms, onUpdateRooms
                 </div>
 
                 <div>
-                  <span className="text-slate-600 block text-[11px]">Вычет проемов</span>
+                  <span className="text-slate-600 block text-[11px]">Проемы (справочно)</span>
                   <strong className="text-amber-700 font-mono text-sm">
-                    -{currentMetrics.openingsArea} м²
+                    {currentMetrics.openingsArea} м²
                   </strong>
                 </div>
 
                 <div className="bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs">
                   <span className="text-blue-700 block text-[10px] font-bold uppercase">
-                    Чистая ткань
+                    Ткань (+5% запас)
                   </span>
                   <strong className="text-blue-900 font-mono text-base font-extrabold">
-                    {currentMetrics.netWallArea} м²
+                    {currentMetrics.fabricArea} м²
                   </strong>
                 </div>
 

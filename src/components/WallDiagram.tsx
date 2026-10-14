@@ -46,8 +46,8 @@ const SingleWallBoxComponent: React.FC<SingleWallBoxProps> = ({
   onMouseEnter,
   onMouseLeave,
 }) => {
-  const wallLen = Number(wall.length) || 3000;
-  const heightVal = Number(ceilingHeight) || 2700;
+  const wallLen = Number.isFinite(wall.length) ? Math.max(0, wall.length) : 0;
+  const heightVal = Number.isFinite(ceilingHeight) ? Math.max(0, ceilingHeight) : 0;
 
   // Размеры холста SVG
   const svgW = 380;
@@ -180,7 +180,7 @@ const SingleWallBoxComponent: React.FC<SingleWallBoxProps> = ({
         </h4>
         {wallOpenings.length > 0 && (
           <span className="text-[11px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-            {wallOpenings.length === 1 ? '1 проем' : `${wallOpenings.length} проема`} (-{wallOpeningsAreaM2} м²)
+            {wallOpenings.length === 1 ? '1 проем' : `${wallOpenings.length} проема`} ({wallOpeningsAreaM2} м², справочно)
           </span>
         )}
       </div>
@@ -404,7 +404,7 @@ const SingleWallBoxComponent: React.FC<SingleWallBoxProps> = ({
                         dominantBaseline="central"
                         className="text-[10px] font-semibold fill-white font-mono"
                       >
-                        {isWindow ? '🪟 Окно' : '🚪 Дверь'} {wMm}×{hMm}мм (-{((wMm * hMm) / 1_000_000).toFixed(2)}м²)
+                        {isWindow ? '🪟 Окно' : '🚪 Дверь'} {wMm}×{hMm}мм ({((wMm * hMm) / 1_000_000).toFixed(2)}м²)
                       </text>
                     </g>
                   </g>

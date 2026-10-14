@@ -361,7 +361,7 @@ const ProjectHeaderComponent: React.FC<ProjectHeaderProps> = ({
           </div>
           <div className="flex items-center gap-1.5 bg-slate-100/80 px-2.5 py-1 rounded-md">
             <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-            <span>Чистая ткань: <strong className="text-slate-800">{results.totalFabricArea} м²</strong></span>
+            <span>Ткань с запасом: <strong className="text-slate-800">{results.totalFabricArea} м²</strong></span>
           </div>
           <div className="flex items-center gap-1.5 bg-slate-100/80 px-2.5 py-1 rounded-md">
             <Ruler className="w-3.5 h-3.5 text-slate-600" />

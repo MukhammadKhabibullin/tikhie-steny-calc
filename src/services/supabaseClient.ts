@@ -75,6 +75,18 @@ export async function saveProjectToSupabase(
   try {
     const projectId = ensureUUID(project.id);
 
+    // Validate schema before any destructive replacement of saved project details.
+    const schemaChecks = await Promise.all([
+      supabase.from('rooms').select('contour').limit(0),
+      supabase.from('walls').select('sort_order').limit(0),
+      supabase.from('project_materials').select('auto_source').limit(0),
+      supabase.from('project_works').select('auto_source').limit(0),
+    ]);
+    const schemaError = schemaChecks.find((check) => check.error)?.error;
+    if (schemaError) {
+      return { success: false, error: `Проверка базы перед сохранением: ${schemaError.message}. Если отсутствуют поля contour, sort_order или auto_source, примените миграцию 20261014_geometry_automation.sql. Сохранённые данные не изменены.` };
+    }
+
     // Подготавливаем комнаты и стены с валидными UUID
     const preparedRooms: Room[] = rooms.map((room) => {
       const roomId = ensureUUID(room.id);
@@ -82,9 +94,11 @@ export async function saveProjectToSupabase(
         ...wall,
         id: ensureUUID(wall.id),
       }));
+      const wallIds = new Map(room.walls.map((wall, index) => [wall.id, preparedWalls[index].id]));
       const preparedOpenings: Opening[] = (room.openings || []).map((op) => ({
         ...op,
         id: ensureUUID(op.id),
+        wallId: op.wallId ? wallIds.get(op.wallId) : undefined,
       }));
 
       return {
@@ -142,6 +156,7 @@ export async function saveProjectToSupabase(
         project_id: projectId,
         name: r.name || 'Комната',
         ceiling_height: Number(r.ceilingHeight) || 0,
+        contour: r.contour ?? 'open',
       }));
 
       const { error: insertRoomsError } = await supabase.from('rooms').insert(roomsToInsert);
@@ -153,11 +168,12 @@ export async function saveProjectToSupabase(
 
       // 4. Собираем и вставляем стены всех комнат в таблицу 'walls'
       const wallsToInsert = preparedRooms.flatMap((r) =>
-        (r.walls || []).map((w) => ({
+        (r.walls || []).map((w, index) => ({
           id: w.id,
           room_id: r.id,
           name: w.name || 'Стена',
           length: Number(w.length) || 0,
+          sort_order: index,
         }))
       );
 
@@ -197,6 +213,7 @@ export async function saveProjectToSupabase(
         id: ensureUUID(m.id), project_id: projectId, catalog_id: m.catalogId || null,
         category: m.category, name: m.name, unit: m.unit, cost_price: m.costPrice,
         client_price: m.clientPrice, quantity: m.quantity, profile_unit_mode: m.profileUnitMode || null,
+        auto_source: m.autoSource ?? null,
       })));
       if (error) return { success: false, error: error.message };
     }
@@ -205,6 +222,7 @@ export async function saveProjectToSupabase(
         id: ensureUUID(w.id), project_id: projectId, catalog_id: w.catalogId || null,
         category: w.category, name: w.name, unit: w.unit, cost_price: w.costPrice,
         client_price: w.clientPrice, quantity: w.quantity,
+        auto_source: w.autoSource ?? null,
       })));
       if (error) return { success: false, error: error.message };
     }
@@ -279,25 +297,25 @@ export async function fetchSavedProjects(organizationId?: string | null): Promis
 export async function fetchProjectRoomsWithWalls(projectId: string): Promise<{ rooms: Room[]; materials: MaterialItem[]; works: WorkItem[] }> {
   const { data: roomsData, error: roomsError } = await supabase
     .from('rooms')
-    .select('id, name, ceiling_height')
+    .select('*')
     .eq('project_id', projectId);
 
   if (roomsError || !roomsData) {
     console.error('Ошибка загрузки комнат:', roomsError);
-    return { rooms: [], materials: [], works: [] };
+    throw new Error(roomsError?.message || 'Не удалось загрузить комнаты проекта');
   }
 
   const roomIds = roomsData.map((r) => r.id);
-  const { data: wallsData, error: wallsError } = await supabase
+  const { data: wallsData, error: wallsError } = roomIds.length ? await supabase
     .from('walls')
-    .select('id, room_id, name, length')
-    .in('room_id', roomIds);
+    .select('*')
+    .in('room_id', roomIds) : { data: [], error: null };
 
   if (wallsError) {
-    console.error('Ошибка загрузки стен:', wallsError);
+    throw new Error(wallsError.message);
   }
 
-  const wallsByRoom = (wallsData || []).reduce<Record<string, Wall[]>>((acc, w) => {
+  const wallsByRoom = (wallsData || []).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).reduce<Record<string, Wall[]>>((acc, w) => {
     if (!acc[w.room_id]) acc[w.room_id] = [];
     acc[w.room_id].push({
       id: w.id,
@@ -307,27 +325,32 @@ export async function fetchProjectRoomsWithWalls(projectId: string): Promise<{ r
     return acc;
   }, {});
 
-  const { data: openingsData } = await supabase.from('openings').select('id, room_id, wall_id, type, width, height').in('room_id', roomIds);
+  const { data: openingsData, error: openingsError } = roomIds.length
+    ? await supabase.from('openings').select('id, room_id, wall_id, type, width, height').in('room_id', roomIds)
+    : { data: [], error: null };
+  if (openingsError) throw new Error(openingsError.message);
   const openingsByRoom = (openingsData || []).reduce<Record<string, Opening[]>>((acc, o) => {
     (acc[o.room_id] ||= []).push({ id: o.id, wallId: o.wall_id || undefined, type: o.type as Opening['type'], width: Number(o.width) || 0, height: Number(o.height) || 0 });
     return acc;
   }, {});
-  const [{ data: materialRows }, { data: workRows }] = await Promise.all([
+  const [{ data: materialRows, error: materialsError }, { data: workRows, error: worksError }] = await Promise.all([
     supabase.from('project_materials').select('*').eq('project_id', projectId),
     supabase.from('project_works').select('*').eq('project_id', projectId),
   ]);
+  if (materialsError || worksError) throw new Error((materialsError || worksError)!.message);
 
   const rooms = roomsData.map((r) => ({
     id: r.id,
     name: r.name,
-    ceilingHeight: Number(r.ceiling_height) || 2700,
+    ceilingHeight: Number(r.ceiling_height) || 0,
+    contour: r.contour === 'closed' ? 'closed' as const : 'open' as const,
     walls: wallsByRoom[r.id] || [],
     openings: openingsByRoom[r.id] || [],
   }));
   return {
     rooms,
-    materials: (materialRows || []).map((m) => ({ id: m.id, catalogId: m.catalog_id || undefined, category: m.category as MaterialCategory, name: m.name, unit: m.unit as UnitType, costPrice: Number(m.cost_price) || 0, clientPrice: Number(m.client_price) || 0, price: Number(m.client_price) || 0, quantity: Number(m.quantity) || 0, profileUnitMode: m.profile_unit_mode || undefined })),
-    works: (workRows || []).map((w) => ({ id: w.id, catalogId: w.catalog_id || undefined, category: w.category as WorkCategory, name: w.name, unit: w.unit as UnitType, costPrice: Number(w.cost_price) || 0, clientPrice: Number(w.client_price) || 0, quantity: Number(w.quantity) || 0 })),
+    materials: (materialRows || []).map((m) => ({ id: m.id, catalogId: m.catalog_id || undefined, category: m.category as MaterialCategory, name: m.name, unit: m.unit as UnitType, costPrice: Number(m.cost_price) || 0, clientPrice: Number(m.client_price) || 0, price: Number(m.client_price) || 0, quantity: Number(m.quantity) || 0, profileUnitMode: m.profile_unit_mode || undefined, autoSource: m.auto_source || undefined })),
+    works: (workRows || []).map((w) => ({ id: w.id, catalogId: w.catalog_id || undefined, category: w.category as WorkCategory, name: w.name, unit: w.unit as UnitType, costPrice: Number(w.cost_price) || 0, clientPrice: Number(w.client_price) || 0, quantity: Number(w.quantity) || 0, autoSource: w.auto_source || undefined })),
   };
 }
 
