@@ -10,7 +10,7 @@ import {
   catalogPricesForMaterial,
 } from './utils/calculator';
 import { DEFAULT_MATERIALS, DEFAULT_WORKS } from './data/prices';
-import { syncGeometryMaterials, syncGeometryProfiles, syncOpeningWorks } from './utils/geometrySync';
+import { syncGeometryMaterials, syncOpeningWorks } from './utils/geometrySync';
 import { exportOrderWorkbook } from './utils/orderExport';
 import { ProjectHeader } from './components/ProjectHeader';
 import { RoomBuilder } from './components/RoomBuilder';
@@ -254,9 +254,9 @@ export function App() {
 
   const handleSyncGeometry = useCallback(() => handleUpdateRooms(rooms), [handleUpdateRooms, rooms]);
   const handleUpdateMaterials = useCallback((next: MaterialItem[]) => {
-    setMaterials(syncGeometryProfiles(next, rooms, catalog));
+    setMaterials(next);
     setLastSavedAt(null);
-  }, [rooms, catalog]);
+  }, []);
 
   const handleUpdateProject = useCallback((fields: Partial<Project>) => {
     setProject((prev) => ({ ...prev, ...fields }));

@@ -98,7 +98,7 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
             <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 select-none">
               {CATEGORY_NAMES[item.category] || item.category}
             </span>
-            {item.autoSource && <span className="text-[10px] text-blue-600" title="Количество пересчитывается по геометрии. Для дополнительного профиля добавьте ручную позицию.">Авто</span>}
+            {item.autoSource && <span className="text-[10px] text-blue-600" title="Количество рассчитано по геометрии. Его можно изменить вручную; изменение геометрии или заполнение по геометрии пересчитает количество.">Авто</span>}
             {item.autoSource && !item.catalogId && <span className="text-[10px] text-amber-700" title="Позиция не найдена в загруженном каталоге. Используется цена встроенного прайс-листа; её можно изменить или синхронизировать позже.">Цена из шаблона</span>}
             {item.category === 'profile' && !item.autoSource && <span className="text-[10px] text-slate-500" title="Ручная позиция сохраняется дополнительно к автоматическим профилям. Старые проекты не переводятся в автоматический режим без вашего решения.">Ручная</span>}
           </div>
@@ -170,7 +170,6 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
       <td className="py-2.5 px-3 text-right">
         <NumericInput
           aria-label={`Количество: ${item.name}`}
-          readOnly={!!item.autoSource}
           value={item.quantity}
           onValueChange={(value) =>
             onUpdateItem(item.id, {
@@ -179,6 +178,7 @@ const MaterialRowItem = React.memo<MaterialRowItemProps>(({
           }
           className="w-24 text-right font-mono font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
           step={item.unit === 'pcs' ? 1 : 0.1}
+          title={item.autoSource ? 'Количество можно изменить вручную. При изменении геометрии оно будет рассчитано заново.' : undefined}
         />
       </td>
 
