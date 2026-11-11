@@ -2,7 +2,7 @@ import type { CatalogMaterialItem, MaterialItem, Room, WorkItem } from '../types
 import { DEFAULT_MATERIALS } from '../data/prices';
 import {
   calculateProfilePieces, calculateRoomProfiles, calculateTotalRoomMetrics,
-  FABRIC_RESERVE_FACTOR, findMatchingCatalogMaterial, OPENING_INSTALLATION_PRICE,
+  FABRIC_RESERVE_FACTOR, findMatchingCatalogMaterial, OPENING_INSTALLATION_COST_PRICE, OPENING_INSTALLATION_PRICE,
   roundTo, syncMaterialsWithGeometry,
 } from './calculator';
 
@@ -69,6 +69,6 @@ export function syncOpeningWorks(works: WorkItem[], rooms: Room[]): WorkItem[] {
   return [...manual, {
     id: previous?.id ?? crypto.randomUUID(), autoSource: 'opening-installation',
     category: 'additional', name: 'Монтаж оконных и дверных проёмов', unit: 'pcs',
-    quantity, clientPrice: OPENING_INSTALLATION_PRICE, costPrice: 0,
+    quantity, clientPrice: OPENING_INSTALLATION_PRICE, costPrice: OPENING_INSTALLATION_COST_PRICE,
   }];
 }

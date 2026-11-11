@@ -12,6 +12,11 @@ function room(count = 1, contour = 'open', openings = []) {
 const windowOpening = { id: 'window', type: 'window', width: 1400, height: 1500, wallId: 'wall-0' };
 const doorOpening = { id: 'door', type: 'door', width: 800, height: 2100, wallId: 'wall-1' };
 const material = (category, quantity = 0) => ({ id: category, category, name: category, quantity, unit: 'm2', costPrice: 100, clientPrice: 200 });
+const catalogMaterial = (catalogId, quantity) => {
+  const item = DEFAULT_MATERIALS.find(candidate => candidate.id === catalogId);
+  assert.ok(item, `missing catalog material ${catalogId}`);
+  return { ...item, id: `material-${catalogId}`, catalogId, quantity };
+};
 
 for (const [input, text, value] of [
   ['', '', 0], ['0', '0', 0], ['00', '0', 0], ['00025', '25', 25],
@@ -133,48 +138,85 @@ test('opening installation is charged once, included in total and margin, persis
   assert.deepEqual(syncOpeningWorks(works, rooms), works);
   assert.equal(works[1].quantity, 2);
   assert.equal(works[1].clientPrice, 6000);
+  assert.equal(works[1].costPrice, 3500);
   const totals = calc.calculateProjectTotals(rooms, [], 1400, 800, undefined, undefined, undefined, undefined, undefined, works);
   assert.equal(totals.openingInstallationCost, 12000);
-  assert.equal(totals.installationCost, 17.01 * 1400 + 12000 + 200);
-  assert.equal(totals.installationCostPrice, 13688);
+  assert.equal(totals.installationCost, 17.01 * 800 + 12000 + 200);
+  assert.equal(totals.installationCostPrice, 13884);
   assert.equal(totals.totalClientPrice, totals.installationCost);
   assert.equal(totals.margin, calc.roundTo(totals.totalClientPrice - totals.installationCostPrice));
   assert.deepEqual(syncOpeningWorks(works, [room()]), [manualWork]);
   assert.equal(calc.calculateProjectTotals([room()], []).openingInstallationCost, 0);
 });
 
-test('base installation follows the current primary fabric quantity and falls back to geometry', () => {
+test('fabric labor follows the current primary fabric quantity and falls back to geometry', () => {
   const rooms = [room()];
   const geometryArea = calc.calculateTotalRoomMetrics(rooms).totalFabricArea;
   const initialFabric = material('fabric', geometryArea);
   const initial = calc.calculateProjectTotals(rooms, [initialFabric]);
   assert.equal(initial.billableFabricArea, 8.51);
-  assert.equal(initial.baseInstallationCost, 11914);
-  assert.equal(initial.installationCostPrice, 6808);
+  assert.equal(initial.baseInstallationCost, 6808);
+  assert.equal(initial.installationCostPrice, 3404);
 
   const edited = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 10 }]);
   assert.equal(edited.totalFabricArea, 8.51);
   assert.equal(edited.billableFabricArea, 10);
-  assert.equal(edited.baseInstallationCost, 14000);
-  assert.equal(edited.installationCostPrice, 8000);
+  assert.equal(edited.baseInstallationCost, 8000);
+  assert.equal(edited.installationCostPrice, 4000);
 
   const restored = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 8.51 }]);
-  assert.equal(restored.baseInstallationCost, 11914);
-  assert.equal(restored.installationCostPrice, 6808);
+  assert.equal(restored.baseInstallationCost, 6808);
+  assert.equal(restored.installationCostPrice, 3404);
 
   const fallback = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 0 }]);
   assert.equal(fallback.billableFabricArea, 8.51);
-  assert.equal(fallback.baseInstallationCost, 11914);
+  assert.equal(fallback.baseInstallationCost, 6808);
 });
 
-test('non-fabric quantities and alternative fabric rows do not double-charge installation', () => {
+test('mapped non-fabric quantities affect labor while alternative fabric rows do not double-charge it', () => {
   const rooms = [room()];
   const primary = material('fabric', 10);
   const alternative = { ...material('fabric', 25), id: 'alternative-fabric' };
-  const insulation = material('insulation', 50);
-  const totals = calc.calculateProjectTotals(rooms, [primary, alternative, insulation]);
+  const membrane = catalogMaterial('5eba4106-4f8d-5a9f-a5b3-a1359dedb952', 50);
+  const totals = calc.calculateProjectTotals(rooms, [primary, alternative, membrane]);
   assert.equal(totals.billableFabricArea, 10);
-  assert.equal(totals.baseInstallationCost, 14000);
+  assert.equal(totals.baseInstallationCost, 25500);
+  assert.equal(totals.installationCostPrice, 11500);
+});
+
+test('fabric, membrane, plinth and profile quantities all update price-list labor', () => {
+  const materials = [
+    catalogMaterial('e813c430-0363-5897-9f29-65749a8b58c2', 100),
+    catalogMaterial('5eba4106-4f8d-5a9f-a5b3-a1359dedb952', 100),
+    catalogMaterial('15423a83-a55c-52fc-9d35-82f874004d12', 13.15),
+    catalogMaterial('506b21d0-7244-518e-a583-856431a42724', 31.24),
+  ];
+  const automaticWorks = calc.calculateAutomaticMaterialWorks(materials, 0);
+  const genericProfileWork = automaticWorks.find(work => work.catalogId === '64212546-0c36-548c-8360-22830b4cab33');
+  assert.equal(genericProfileWork.quantity, 44.39);
+
+  const totals = calc.calculateProjectTotals([], materials);
+  assert.equal(totals.automaticMaterialWorksCost, 137195);
+  assert.equal(totals.automaticMaterialWorksCostPrice, 61658.5);
+  assert.equal(totals.installationCost, 137195);
+  assert.equal(totals.installationCostPrice, 61658.5);
+});
+
+test('two-meter profile pieces are converted back to meters for labor', () => {
+  const profile = { ...catalogMaterial('506b21d0-7244-518e-a583-856431a42724', 3), unit: 'pcs', profileUnitMode: 'pcs' };
+  const work = calc.calculateAutomaticMaterialWorks([profile], 0)[0];
+  assert.equal(work.quantity, 6);
+  assert.equal(work.clientPrice * work.quantity, 3000);
+});
+
+test('height surcharge is applied to all labor at 3.5 and 5 meters', () => {
+  const fabric = material('fabric', 10);
+  const roomAt = height => [{ ...room(), ceilingHeight: height }];
+  assert.equal(calc.calculateProjectTotals(roomAt(3499), [fabric]).heightSurchargeCost, 0);
+  assert.equal(calc.calculateProjectTotals(roomAt(3500), [fabric]).heightSurchargeCost, 1600);
+  assert.equal(calc.calculateProjectTotals(roomAt(3500), [fabric]).installationCost, 9600);
+  assert.equal(calc.calculateProjectTotals(roomAt(5000), [fabric]).heightSurchargeCost, 2400);
+  assert.equal(calc.calculateProjectTotals(roomAt(5000), [fabric]).installationCost, 10400);
 });
 
 test('millimeter precision is retained until wall area is calculated', () => {

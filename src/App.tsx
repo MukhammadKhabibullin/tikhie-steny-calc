@@ -237,8 +237,8 @@ export function App() {
 
   // Расчет итоговых финансовых показателей и объемов геометрии
   const totals = useMemo(() => {
-    return calculateProjectTotals(rooms, materials, 1400, 800, undefined, undefined, undefined, undefined, roomMetrics, works);
-  }, [rooms, materials, roomMetrics, works]);
+    return calculateProjectTotals(rooms, materials, 1400, 800, undefined, undefined, undefined, undefined, roomMetrics, works, worksCatalog);
+  }, [rooms, materials, roomMetrics, works, worksCatalog]);
 
   const totalFabricArea = totals.totalFabricArea;
   const totalProfileLength = totals.totalProfileLength;

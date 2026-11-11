@@ -1,5 +1,6 @@
-import type { Room, MaterialItem, WorkItem, CatalogMaterialItem, CalculationResult, RoomCalculationResult } from '../types';
-import { OVERHEAD_RATE } from '../data/prices';
+import type { Room, MaterialItem, WorkItem, CatalogMaterialItem, CatalogWorkItem, CalculationResult, RoomCalculationResult } from '../types';
+import { DEFAULT_WORKS, HEIGHT_SURCHARGES, OVERHEAD_RATE } from '../data/prices';
+import { getMaterialWorkCatalogId, WORK_CATALOG_IDS } from '../data/materialWorkMappings';
 
 /**
  * Конвертация миллиметров в метры
@@ -64,6 +65,7 @@ export const FABRIC_RESERVE_FACTOR = 1.05; // +5% технологический
 export const PROFILE_RESERVE_FACTOR = 1.08; // +8% технологический запас на обрезки и стыки профиля
 export const PLINTH_RESERVE_FACTOR = 1.05; // +5% технологический запас на подрезку углов плинтуса
 export const OPENING_INSTALLATION_PRICE = 6000;
+export const OPENING_INSTALLATION_COST_PRICE = 3500;
 
 export const isClosedContour = (room: Room): boolean => room.contour === 'closed' && room.walls.length >= 3;
 
@@ -314,7 +316,7 @@ export const calculateMaterialsClientPrice = (materials: MaterialItem[]): number
 };
 
 /**
- * Returns the area used to price the base installation work.
+ * Returns the primary fabric area used for calculation details and geometry fallback.
  * A manually edited active fabric line takes precedence over geometry, while
  * projects without an active fabric line keep the geometry-based fallback.
  * Only one primary fabric line is used to avoid double charging alternatives.
@@ -330,6 +332,85 @@ export const calculateBillableFabricArea = (
   return primaryFabric
     ? roundTo(Number(primaryFabric.quantity))
     : roundTo(Math.max(0, Number(geometryFabricArea) || 0));
+};
+
+const findWorkCatalogItem = (
+  workCatalogId: string,
+  worksCatalog: CatalogWorkItem[]
+): CatalogWorkItem | undefined => {
+  const canonical = DEFAULT_WORKS.find((item) => item.id === workCatalogId);
+  if (!canonical) return undefined;
+
+  return worksCatalog.find((item) => item.id === workCatalogId)
+    ?? worksCatalog.find((item) => normalizeCatalogName(item.name) === normalizeCatalogName(canonical.name))
+    ?? canonical;
+};
+
+const materialQuantityForWork = (material: MaterialItem, work: CatalogWorkItem): number => {
+  const quantity = Math.max(0, Number(material.quantity) || 0);
+  const isTwoMeterProfilePiece = material.unit === 'pcs'
+    && work.unit === 'm'
+    && ['profile', 'plinth', 'divider', 'bumper'].includes(material.category);
+  return roundTo(isTwoMeterProfilePiece ? quantity * 2 : quantity);
+};
+
+/**
+ * Builds non-persisted labor lines from the current material specification.
+ * Alternative fabric lines are not summed: only the first active fabric is billable.
+ */
+export const calculateAutomaticMaterialWorks = (
+  materials: MaterialItem[],
+  geometryFabricArea: number,
+  worksCatalog: CatalogWorkItem[] = DEFAULT_WORKS
+): WorkItem[] => {
+  const primaryFabric = materials.find(
+    (item) => item.category === 'fabric' && Number(item.quantity) > 0
+  );
+  const quantities = new Map<string, number>();
+
+  for (const material of materials) {
+    if (Number(material.quantity) <= 0) continue;
+    if (material.category === 'fabric' && material !== primaryFabric) continue;
+    const workCatalogId = getMaterialWorkCatalogId(material);
+    if (!workCatalogId) continue;
+    const work = findWorkCatalogItem(workCatalogId, worksCatalog);
+    if (!work) continue;
+    quantities.set(
+      workCatalogId,
+      roundTo((quantities.get(workCatalogId) ?? 0) + materialQuantityForWork(material, work))
+    );
+  }
+
+  if (!primaryFabric && geometryFabricArea > 0) {
+    quantities.set(WORK_CATALOG_IDS.fabric, roundTo(geometryFabricArea));
+  }
+
+  return [...quantities.entries()].flatMap(([workCatalogId, quantity]) => {
+    const work = findWorkCatalogItem(workCatalogId, worksCatalog);
+    if (!work || quantity <= 0) return [];
+    return [{
+      id: `automatic-material-work-${workCatalogId}`,
+      catalogId: work.id,
+      category: work.category,
+      name: work.name,
+      unit: work.unit,
+      costPrice: work.costPrice,
+      clientPrice: work.clientPrice,
+      quantity,
+    } satisfies WorkItem];
+  });
+};
+
+export const calculateHeightSurchargePercent = (rooms: Room[]): number => {
+  const maxHeight = rooms.reduce(
+    (currentMax, room) => Math.max(currentMax, mmToM(room.ceilingHeight)),
+    0
+  );
+  const surcharge = HEIGHT_SURCHARGES.find((item, index) => {
+    const isLast = index === HEIGHT_SURCHARGES.length - 1;
+    return maxHeight >= item.minHeight && (maxHeight < item.maxHeight || (isLast && maxHeight <= item.maxHeight));
+  });
+  return surcharge?.factor ?? 0;
 };
 
 /**
@@ -365,21 +446,26 @@ export const calculateOverheadExpenses = (
  * Расчет итоговых финансовых показателей проекта (оптимизирован для предотвращения повторных обходов)
  * @param rooms список комнат
  * @param materials список материалов
- * @param installationRatePerM2 базовая ставка монтажа за м² (для клиента, по умолчанию 1 400 ₽)
- * @param installationCostPriceRate ставка себестоимости монтажа за м² (оплата монтажникам, по умолчанию 800 ₽)
+ * @param installationRatePerM2 deprecated: retained for positional API compatibility
+ * @param installationCostPriceRate deprecated: retained for positional API compatibility
  */
 export const calculateProjectTotals = (
   rooms: Room[],
   materials: MaterialItem[],
-  installationRatePerM2: number = 1400,
-  installationCostPriceRate: number = 800,
+  _installationRatePerM2: number = 1400,
+  _installationCostPriceRate: number = 800,
   profileReserveFactor: number = PROFILE_RESERVE_FACTOR,
   fabricReserveFactor: number = FABRIC_RESERVE_FACTOR,
   plinthReserveFactor: number = PLINTH_RESERVE_FACTOR,
   overheadRate: { percent: number; minAmount: number } = OVERHEAD_RATE,
   roomMetrics?: ReturnType<typeof calculateTotalRoomMetrics>,
-  works: WorkItem[] = []
+  works: WorkItem[] = [],
+  worksCatalog: CatalogWorkItem[] = DEFAULT_WORKS
 ): CalculationResult => {
+  // Retained so existing positional callers do not break while line-item pricing replaces the composite rate.
+  void _installationRatePerM2;
+  void _installationCostPriceRate;
+
   const {
     totalFabricArea,
     totalProfileLength,
@@ -394,16 +480,28 @@ export const calculateProjectTotals = (
   const materialsClient = calculateMaterialsClientPrice(materials);
   const billableFabricArea = calculateBillableFabricArea(materials, totalFabricArea);
 
-  // Стоимость монтажа (чистая стоимость работ для клиента и себестоимость оплаты мастерам)
+  // Labor is priced by material-linked work lines from the price list.
+  const automaticMaterialWorks = calculateAutomaticMaterialWorks(materials, totalFabricArea, worksCatalog);
+  const automaticMaterialWorksCost = roundTo(
+    automaticMaterialWorks.reduce((sum, work) => sum + work.quantity * work.clientPrice, 0)
+  );
+  const automaticMaterialWorksCostPrice = roundTo(
+    automaticMaterialWorks.reduce((sum, work) => sum + work.quantity * work.costPrice, 0)
+  );
   const openingCount = rooms.reduce((sum, room) => sum + room.openings.length, 0);
   const openingInstallationCost = openingCount * OPENING_INSTALLATION_PRICE;
+  const openingInstallationCostPrice = openingCount * OPENING_INSTALLATION_COST_PRICE;
   const manualWorks = works.filter((work) => work.autoSource !== 'opening-installation');
   const additionalWorksCost = roundTo(manualWorks.reduce((sum, work) => sum + work.quantity * work.clientPrice, 0));
-  // Opening labor cost is not specified; do not invent a contractor payment rate.
-  const additionalCostPrice = manualWorks.reduce((sum, work) => sum + work.quantity * work.costPrice, 0);
-  const installationCostPrice = roundTo(billableFabricArea * installationCostPriceRate + additionalCostPrice);
-  const baseInstallationCost = roundTo(billableFabricArea * installationRatePerM2);
-  const installationClient = roundTo(baseInstallationCost + openingInstallationCost + additionalWorksCost);
+  const additionalCostPrice = roundTo(manualWorks.reduce((sum, work) => sum + work.quantity * work.costPrice, 0));
+  const installationCostPrice = roundTo(
+    automaticMaterialWorksCostPrice + openingInstallationCostPrice + additionalCostPrice
+  );
+  const baseInstallationCost = automaticMaterialWorksCost;
+  const installationBeforeSurcharge = roundTo(baseInstallationCost + openingInstallationCost + additionalWorksCost);
+  const heightSurchargePercent = calculateHeightSurchargePercent(rooms);
+  const heightSurchargeCost = roundTo(installationBeforeSurcharge * heightSurchargePercent);
+  const installationClient = roundTo(installationBeforeSurcharge + heightSurchargeCost);
 
   // Накладные и транспортные расходы (автономная статья расходов: 6% от материалов, но минимум 6 500 руб.)
   const hasActiveItems = (materials && materials.some((m) => m.quantity > 0)) || totalFabricArea > 0;
@@ -420,9 +518,14 @@ export const calculateProjectTotals = (
   return {
     openingCount,
     openingInstallationCost,
+    openingInstallationCostPrice,
     baseInstallationCost,
+    automaticMaterialWorksCost,
+    automaticMaterialWorksCostPrice,
     billableFabricArea,
     additionalWorksCost,
+    heightSurchargeCost,
+    heightSurchargePercent,
     totalFabricArea,
     totalProfileLength,
     totalPlinthLength,

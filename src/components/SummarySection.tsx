@@ -100,23 +100,27 @@ export const SummarySection: React.FC<SummarySectionProps> = ({
                   2. Монтажные работы
                 </span>
                 <span className="text-[11px] font-medium text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded border border-indigo-200">
-                  1 400 ₽/м²
+                  По прайс-листу
                 </span>
               </div>
               <div className="text-2xl font-black text-indigo-950 font-mono">
                 {formatCurrency(results.installationCost)}
               </div>
               <p className="text-xs text-indigo-900/70 mt-1">
-                Чистая установка системы (каркас, демпфер, натяжка ткани) мастерами монтажа.
+                Автоматический расчёт работ по выбранным материалам и их актуальному количеству.
               </p>
               <p className="text-xs text-indigo-900/70 mt-2">
-                Основной монтаж: {formatCurrency(results.baseInstallationCost ?? results.installationCost)}
+                Работы по материалам: {formatCurrency(results.baseInstallationCost ?? results.installationCost)}
               </p>
               <p className="text-xs text-indigo-900/70 mt-1">
                 Проёмы: {results.openingCount ?? 0} × 6 000 ₽ = {formatCurrency(results.openingInstallationCost ?? 0)}
               </p>
               {!!results.additionalWorksCost && <p className="text-xs text-indigo-900/70 mt-1">Дополнительные работы: {formatCurrency(results.additionalWorksCost)}</p>}
-              {!!results.openingCount && <p className="text-[11px] text-slate-600 mt-1">Оплата мастерам за проёмы не задана и в себестоимость не включена.</p>}
+              {!!results.heightSurchargeCost && (
+                <p className="text-xs text-indigo-900/70 mt-1">
+                  Надбавка за высоту ({Math.round((results.heightSurchargePercent ?? 0) * 100)}%): {formatCurrency(results.heightSurchargeCost)}
+                </p>
+              )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-indigo-200/60 flex items-center justify-between text-xs text-indigo-800">

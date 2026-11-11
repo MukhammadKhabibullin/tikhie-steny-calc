@@ -119,9 +119,14 @@ export interface Project {
 export interface CalculationResult {
   openingCount?: number;
   openingInstallationCost?: number;
+  openingInstallationCostPrice?: number;
   baseInstallationCost?: number;
+  automaticMaterialWorksCost?: number;
+  automaticMaterialWorksCostPrice?: number;
   billableFabricArea?: number;
   additionalWorksCost?: number;
+  heightSurchargeCost?: number;
+  heightSurchargePercent?: number;
   totalFabricArea: number; // м² (с технологическим запасом)
   totalProfileLength: number; // пог. м (с запасом 8%)
   totalPlinthLength?: number; // пог. м плинтуса (с запасом 5%)
