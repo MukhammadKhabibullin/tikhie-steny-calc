@@ -143,6 +143,40 @@ test('opening installation is charged once, included in total and margin, persis
   assert.equal(calc.calculateProjectTotals([room()], []).openingInstallationCost, 0);
 });
 
+test('base installation follows the current primary fabric quantity and falls back to geometry', () => {
+  const rooms = [room()];
+  const geometryArea = calc.calculateTotalRoomMetrics(rooms).totalFabricArea;
+  const initialFabric = material('fabric', geometryArea);
+  const initial = calc.calculateProjectTotals(rooms, [initialFabric]);
+  assert.equal(initial.billableFabricArea, 8.51);
+  assert.equal(initial.baseInstallationCost, 11914);
+  assert.equal(initial.installationCostPrice, 6808);
+
+  const edited = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 10 }]);
+  assert.equal(edited.totalFabricArea, 8.51);
+  assert.equal(edited.billableFabricArea, 10);
+  assert.equal(edited.baseInstallationCost, 14000);
+  assert.equal(edited.installationCostPrice, 8000);
+
+  const restored = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 8.51 }]);
+  assert.equal(restored.baseInstallationCost, 11914);
+  assert.equal(restored.installationCostPrice, 6808);
+
+  const fallback = calc.calculateProjectTotals(rooms, [{ ...initialFabric, quantity: 0 }]);
+  assert.equal(fallback.billableFabricArea, 8.51);
+  assert.equal(fallback.baseInstallationCost, 11914);
+});
+
+test('non-fabric quantities and alternative fabric rows do not double-charge installation', () => {
+  const rooms = [room()];
+  const primary = material('fabric', 10);
+  const alternative = { ...material('fabric', 25), id: 'alternative-fabric' };
+  const insulation = material('insulation', 50);
+  const totals = calc.calculateProjectTotals(rooms, [primary, alternative, insulation]);
+  assert.equal(totals.billableFabricArea, 10);
+  assert.equal(totals.baseInstallationCost, 14000);
+});
+
 test('millimeter precision is retained until wall area is calculated', () => {
   const geometry = room();
   geometry.walls[0].length = 1501;

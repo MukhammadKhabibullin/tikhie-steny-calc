@@ -314,6 +314,25 @@ export const calculateMaterialsClientPrice = (materials: MaterialItem[]): number
 };
 
 /**
+ * Returns the area used to price the base installation work.
+ * A manually edited active fabric line takes precedence over geometry, while
+ * projects without an active fabric line keep the geometry-based fallback.
+ * Only one primary fabric line is used to avoid double charging alternatives.
+ */
+export const calculateBillableFabricArea = (
+  materials: MaterialItem[],
+  geometryFabricArea: number
+): number => {
+  const primaryFabric = materials.find(
+    (item) => item.category === 'fabric' && Number(item.quantity) > 0
+  );
+
+  return primaryFabric
+    ? roundTo(Number(primaryFabric.quantity))
+    : roundTo(Math.max(0, Number(geometryFabricArea) || 0));
+};
+
+/**
  * Расчет количества двухметровых хлыстов профиля по метражу
  */
 export const calculateProfilePieces = (meters: number, pieceLengthM: number = 2): number => {
@@ -373,6 +392,7 @@ export const calculateProjectTotals = (
 
   const materialsCost = calculateMaterialsCostPrice(materials);
   const materialsClient = calculateMaterialsClientPrice(materials);
+  const billableFabricArea = calculateBillableFabricArea(materials, totalFabricArea);
 
   // Стоимость монтажа (чистая стоимость работ для клиента и себестоимость оплаты мастерам)
   const openingCount = rooms.reduce((sum, room) => sum + room.openings.length, 0);
@@ -381,8 +401,8 @@ export const calculateProjectTotals = (
   const additionalWorksCost = roundTo(manualWorks.reduce((sum, work) => sum + work.quantity * work.clientPrice, 0));
   // Opening labor cost is not specified; do not invent a contractor payment rate.
   const additionalCostPrice = manualWorks.reduce((sum, work) => sum + work.quantity * work.costPrice, 0);
-  const installationCostPrice = roundTo(totalFabricArea * installationCostPriceRate + additionalCostPrice);
-  const baseInstallationCost = roundTo(totalFabricArea * installationRatePerM2);
+  const installationCostPrice = roundTo(billableFabricArea * installationCostPriceRate + additionalCostPrice);
+  const baseInstallationCost = roundTo(billableFabricArea * installationRatePerM2);
   const installationClient = roundTo(baseInstallationCost + openingInstallationCost + additionalWorksCost);
 
   // Накладные и транспортные расходы (автономная статья расходов: 6% от материалов, но минимум 6 500 руб.)
@@ -401,6 +421,7 @@ export const calculateProjectTotals = (
     openingCount,
     openingInstallationCost,
     baseInstallationCost,
+    billableFabricArea,
     additionalWorksCost,
     totalFabricArea,
     totalProfileLength,

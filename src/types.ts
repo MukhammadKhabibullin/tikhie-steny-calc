@@ -120,6 +120,7 @@ export interface CalculationResult {
   openingCount?: number;
   openingInstallationCost?: number;
   baseInstallationCost?: number;
+  billableFabricArea?: number;
   additionalWorksCost?: number;
   totalFabricArea: number; // м² (с технологическим запасом)
   totalProfileLength: number; // пог. м (с запасом 8%)
